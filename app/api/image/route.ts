@@ -1,6 +1,6 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
-import { buildOptimizedImageRequest, UnsafeImagePromptError } from "@/lib/image-prompt";
+import { buildOptimizedImageRequest, UnsafeImagePromptError, wantsExplicitAdultImage } from "@/lib/image-prompt";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -46,28 +46,39 @@ export async function POST(request: Request) {
     const imageSettings = sanitizeImageSettings(body.imageSettings);
     const isProfile = body.mode === "profile";
     const customImagePrompt = String(body.customImagePrompt || "").slice(0, 500);
+    const recentContext = String(body.recentContext || "").slice(0, 1200);
+    const explicitRequested = !isProfile && imageSettings.safetyLevel === "standard" && wantsExplicitAdultImage(requestText, customImagePrompt, recentContext);
     const optimizedRequest = isProfile ? "" : buildOptimizedImageRequest({
       requestText,
       customImagePrompt,
-      recentContext: String(body.recentContext || "").slice(0, 1200),
+      recentContext,
       safetyLevel: imageSettings.safetyLevel,
+      characterAppearance: character.appearance,
+      characterFashion: character.fashion,
+      characterAge: character.age,
     });
     const scene = isProfile
       ? "friendly profile portrait for a fictional AI matching app, looking at camera, clean softly lit background, tasteful everyday outfit"
       : optimizedRequest;
     const adultStyle = isProfile
-      ? "tasteful everyday portrait"
+      ? "tasteful everyday portrait, fully clothed"
       : imageSettings.safetyLevel === "strict"
         ? "tasteful everyday fashion, non-sexual mood, full clothing coverage"
-        : "adult content fully allowed when requested: sensual, nude, or explicit sexual acts including visible genitals are permitted for fictional consenting adults over 18; follow the user's scene request closely";
-    const prompt = `${character.imagePrompt}\n${scene}\n${adultStyle}\nUse the character description only for stable identity traits such as age, face, hair and build. The current scene request has priority for clothing, pose, expression, camera angle, nudity level and location. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nconsistent facial identity, realistic smartphone photography or illustration as appropriate, clearly an adult age ${character.age}, no text, no watermark`;
+        : explicitRequested
+          ? "follow the user's requested clothing, pose and explicitness exactly; keep correct human anatomy"
+          : "keep the character clothed in the requested or default everyday outfit; do not make her nude; obey the specified pose";
+    const prompt = `${character.imagePrompt}\n${scene}\n${adultStyle}\nUse the character description only for stable identity traits such as age, face, hair, height and build. Never invent extra arms or an unnaturally tall giant body. The current scene request has priority for clothing, pose, expression, camera angle and location. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nexactly two arms and two legs, normal adult proportions, consistent facial identity, realistic smartphone photography, clearly an adult age ${character.age}, no text, no watermark`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
     const referenceImage = referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined;
     const modelsLabFallback = async () => {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
+      const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
+      const negativePrompt = (isProfile || imageSettings.safetyLevel === "strict" || !explicitRequested)
+        ? `${baseNegative}, nude, naked, fully nude, unexpected nudity`
+        : baseNegative;
       return generateModelsLabImages({
         prompt,
-        negativePrompt: imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT,
+        negativePrompt,
         style: imageSettings.style,
         samples: isProfile ? 1 : imageSettings.samples,
         referenceImage: modelslabReference,
