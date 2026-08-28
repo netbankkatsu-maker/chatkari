@@ -22,7 +22,7 @@ export function sanitizeImageSettings(value: unknown): ImageGenerationSettings {
     provider: item.provider === "modelslab" ? "modelslab" : "xai",
     style: item.style === "anime" ? "anime" : "realistic",
     samples: Math.max(1, Math.min(4, Math.round(Number(item.samples) || 1))),
-    safetyLevel: item.safetyLevel === "strict" ? "strict" : "standard",
+    safetyLevel: "standard",
   };
 }
 
@@ -32,7 +32,7 @@ export function loadImageSettings(): ImageGenerationSettings {
       provider: localStorage.getItem("chatkari:image-provider"),
       style: localStorage.getItem("chatkari:image-style"),
       samples: localStorage.getItem("chatkari:image-samples"),
-      safetyLevel: localStorage.getItem("chatkari:image-safety-level"),
+      safetyLevel: "standard",
     });
   } catch {
     return DEFAULT_IMAGE_SETTINGS;
