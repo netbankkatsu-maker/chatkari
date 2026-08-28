@@ -39,8 +39,8 @@ function visualRewrite(value: string, safetyLevel: ImageSafetyLevel) {
 }
 
 function extractSceneHints(text: string) {
-  const clothingMatch = text.match(/(服|服装|衣装|ニット|ブラウス|シャツ|パーカー|コート|ワンピース|スカート|デニム|ジーンズ|部屋着|パジャマ|水着|下着|ランジェリー|全裸|裸|ヌード)[^。\n]{0,40}/);
-  const poseMatch = text.match(/(ポーズ|座って|立って|寝転|歩いて|こちらを見て|微笑|笑顔|腕組み|ピース|振り返)[^。\n]{0,30}/);
+  const clothingMatch = text.match(/(服|服装|衣装|ニット|セーター|ブラウス|シャツ|パーカー|コート|ワンピース|スカート|デニム|ジーンズ|レギンス|部屋着|パジャマ|水着|下着|ランジェリー|全裸|裸|ヌード)[^。\n]{0,50}/);
+  const poseMatch = text.match(/(ポーズ|座って|立って|寝転|ゴロゴロ|歩いて|こちらを見て|微笑|笑顔|腕組み|ピース|振り返)[^。\n]{0,30}/);
   const placeMatch = text.match(/(部屋|キッチン|庭|畑|街|海|カフェ|ベッド|公園|屋外|室内)[^。\n]{0,30}/);
   return {
     clothing: clothingMatch?.[0]?.trim(),
@@ -88,8 +88,8 @@ export function buildOptimizedImageRequest(input: {
   const contentBoundary = safetyLevel === "strict"
     ? "keep the character fully clothed; no nudity, no visible genitals, no explicit sexual acts, no minors, no coercion"
     : explicitRequested
-      ? "explicit adult imagery is allowed only because the user requested it; still keep correct human anatomy; no minors, no coercion, no real people"
-      : "keep the character clothed unless the user explicitly asked to undress; do not default to nude; no extra limbs; no giant or elongated body; no minors, no coercion, no real people";
+      ? "explicit adult imagery is allowed only because the user requested it; still keep correct human anatomy with one head and one face; no minors, no coercion, no real people"
+      : "keep the character clothed unless the user explicitly asked to undress; do not default to nude; exactly one head and one face; no extra limbs; no giant or elongated body; no minors, no coercion, no real people";
 
   return [
     "[REQUEST]",
@@ -101,9 +101,9 @@ export function buildOptimizedImageRequest(input: {
     `pose: ${poseLine}`,
     `place: ${placeLine}`,
     input.characterAppearance ? `body: adult woman, ${input.characterAppearance}, normal human proportions, not giant, not elongated` : "body: one adult woman, normal human proportions, not giant, not elongated",
-    "anatomy: exactly two arms, two hands, two legs, five fingers per hand, no extra limbs, no fused limbs, no distorted torso",
+    "anatomy: exactly one head, one face, two eyes, two arms, two hands, two legs, five fingers per hand; no extra limbs, no second face, no fused bodies",
     "[CONTEXT RULE]",
-    "Obey clothing and pose from the latest user request first. Do not ignore specified clothes. Do not suddenly make the character nude unless the request clearly asks for it.",
+    "Generate exactly one woman. Never add a second head, second face, or second person. Obey clothing and pose from the latest conversation first. Do not ignore specified clothes. Do not suddenly make the character nude unless the request clearly asks for it.",
     "[ART DIRECTION]",
     "high-quality smartphone photo, correct anatomy, realistic scale, clear lighting, visually clear at 1K resolution",
     "[SUBJECT & CONSENT]",
