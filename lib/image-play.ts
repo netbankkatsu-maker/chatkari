@@ -24,7 +24,6 @@ export function playPromptAddons(categories: PlayCategory[]) {
   return rules.filter((rule) => categories.includes(rule.id)).map((rule) => rule.prompt).join(", ");
 }
 
-export function playLoras(categories: PlayCategory[]) {
-  if (!categories.length) return { loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
-  return { loraModel: "add-detail-lora", loraStrength: "0.35" };
+export function playLoras(_categories: PlayCategory[]) {
+  return { loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
 }
