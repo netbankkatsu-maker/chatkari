@@ -5,6 +5,10 @@ const MODELS: Record<ImageStyle, string> = {
   realistic: "realistic-vision-51",
   anime: "anything-v3",
 };
+const NSFW_MODELS: Record<ImageStyle, string> = {
+  realistic: "epicrealism",
+  anime: "anything-v3",
+};
 
 type ModelsLabResponse = {
   status?: string;
@@ -55,13 +59,14 @@ export async function generateModelsLabImages(input: {
   samples: number;
   referenceImage?: string;
   enableSafetyChecker?: boolean;
+  nsfwModel?: boolean;
 }) {
   const key = process.env.MODELSLAB_API_KEY;
   if (!key) throw new ModelsLabApiError(503, "MODELSLAB_API_KEY is not configured");
   const samples = Math.max(1, Math.min(4, Math.round(input.samples)));
   const commonPayload = {
     key,
-    model_id: MODELS[input.style],
+    model_id: input.nsfwModel ? NSFW_MODELS[input.style] : MODELS[input.style],
     prompt: input.style === "anime" ? `high quality detailed anime illustration, ${input.prompt}` : input.prompt,
     negative_prompt: input.negativePrompt,
     enhance_prompt: "no",
@@ -70,6 +75,7 @@ export async function generateModelsLabImages(input: {
     samples,
     num_inference_steps: 28,
     safety_checker: input.enableSafetyChecker ? "yes" : "no",
+    safety_checker_type: input.enableSafetyChecker ? "sensitive" : "none",
     seed: null,
     guidance_scale: 7.5,
     clip_skip: 2,
@@ -97,7 +103,15 @@ export async function generateModelsLabImages(input: {
       }
     }
   } else {
-    payload = await requestModelsLab("/text2img", commonPayload);
+    try {
+      payload = await requestModelsLab("/text2img", commonPayload);
+    } catch (error) {
+      if (input.nsfwModel && error instanceof ModelsLabApiError) {
+        payload = await requestModelsLab("/text2img", { ...commonPayload, model_id: MODELS[input.style] });
+      } else {
+        throw error;
+      }
+    }
   }
   let urls = validOutputUrls(payload).slice(0, samples);
   if (urls.length) return { urls, referenceUsed };
@@ -114,7 +128,7 @@ export async function generateModelsLabImages(input: {
 }
 
 export const MODELSLAB_NEGATIVE_PROMPT = [
-  "minor", "child", "teen", "underage", "young-looking", "school uniform",
+  "minor", "child", "teen", "underage", "school uniform",
   "non-consensual", "coercion", "rape", "voyeurism", "unconscious person",
   "real person", "celebrity", "public figure",
   "low quality", "blurry", "bad anatomy", "deformed", "extra fingers", "extra limbs",
