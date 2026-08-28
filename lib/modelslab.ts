@@ -75,7 +75,6 @@ export async function generateModelsLabImages(input: {
     samples,
     num_inference_steps: 28,
     safety_checker: input.enableSafetyChecker ? "yes" : "no",
-    safety_checker_type: input.enableSafetyChecker ? "sensitive" : "none",
     seed: null,
     guidance_scale: 7.5,
     clip_skip: 2,
