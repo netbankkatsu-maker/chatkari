@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const customImagePrompt = String(body.customImagePrompt || "").slice(0, 500);
     const recentContext = String(body.recentContext || "").slice(0, 1200);
     const photoDescription = String(body.photoDescription || "").slice(0, 500);
-    const clothingMode = isProfile ? "clothed" : resolveClothingMode(requestText, customImagePrompt, imageSettings.safetyLevel);
+    const clothingMode = isProfile ? "clothed" : resolveClothingMode(requestText, customImagePrompt, imageSettings.safetyLevel, recentContext);
     const optimizedRequest = isProfile ? "" : buildOptimizedImageRequest({
       requestText,
       customImagePrompt,
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const adultStyle = isProfile || imageSettings.safetyLevel === "strict"
       ? "tasteful everyday portrait, fully clothed, one person only"
       : clothingMode === "explicit"
-        ? "explicit adult sexual photograph of one woman matching the user request, including requested genitals, fluids or sex acts, no collage"
+        ? "adult sexual photograph of one woman matching the user request, no collage"
         : clothingMode === "nude"
         ? "single photo of one woman, nude only because the user asked, no collage, no second person"
         : clothingMode === "lingerie"
@@ -162,8 +162,8 @@ export async function POST(request: Request) {
       if (error.status === 429) return Response.json({ error: "ModelsLabが混み合っています。少し待ってから試してください。" }, { status: 429 });
       if (error.status === 504) return Response.json({ error: "画像生成に時間がかかっています。もう一度試してください。" }, { status: 504 });
       const detail = error.message || "";
-      if (/nsfw|safety|explicit|adult content/i.test(detail)) {
-        return Response.json({ error: "画像生成サービス側で内容が制限されました。表現を変えるか、別のサービス（xAI）を試してください。" }, { status: 400 });
+      if (/nsfw content detected|nsfw_content_detected|safety checker flagged/i.test(detail)) {
+        return Response.json({ error: `画像生成サービス側で内容が制限されました。${detail}`.slice(0, 180) }, { status: 400 });
       }
       return Response.json({ error: detail || "ModelsLabで画像を生成できませんでした。設定またはモデルを確認してください。" }, { status: 502 });
     }
