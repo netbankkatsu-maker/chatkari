@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       referenceImage?: string;
       character?: unknown;
       customImagePrompt?: string;
+      photoDescription?: string;
       imageSettings?: unknown;
       referenceSource?: "conversation" | "profile" | "none";
     };
@@ -47,11 +48,13 @@ export async function POST(request: Request) {
     const isProfile = body.mode === "profile";
     const customImagePrompt = String(body.customImagePrompt || "").slice(0, 500);
     const recentContext = String(body.recentContext || "").slice(0, 1200);
+    const photoDescription = String(body.photoDescription || "").slice(0, 500);
     const clothingMode = isProfile ? "clothed" : resolveClothingMode(requestText, customImagePrompt, imageSettings.safetyLevel);
     const optimizedRequest = isProfile ? "" : buildOptimizedImageRequest({
       requestText,
       customImagePrompt,
       recentContext,
+      photoDescription,
       safetyLevel: imageSettings.safetyLevel,
       characterAppearance: character.appearance,
       characterFashion: character.fashion,
@@ -66,7 +69,7 @@ export async function POST(request: Request) {
         ? "single photo of one woman, nude only because the user asked, no collage, no second person"
         : clothingMode === "lingerie"
           ? "single photo of one woman wearing bra and panties, underwear on, not nude, no collage"
-          : "single photo of one clothed woman, keep the requested or default outfit on, not nude, no collage";
+          : "single photo of one clothed woman; wear exactly the clothes named in the photo description; do not invent a different outfit or landscape";
     const identity = buildIdentityLock({
       imagePrompt: character.imagePrompt,
       appearance: character.appearance,
