@@ -82,7 +82,7 @@ export function SettingsScreen() {
             <div><p className="eyebrow">IMAGE STYLE</p><h1>画像生成スタイル</h1></div>
           </div>
           <p className="settings-description">相手から届く画像の生成サービス、画風、枚数、雰囲気を設定できます。変更は次の画像生成から反映されます。</p>
-          <p className="image-optimizer-note"><strong>安全レベル：{imageSafetyLevel === "standard" ? "標準" : "厳しめ"}</strong> 要求を被写体・衣装・構図・照明・画質へ内部整理し、安全な表現へ変換します。</p>
+          <p className="image-optimizer-note"><strong>安全レベル：{imageSafetyLevel === "standard" ? "標準" : "厳しめ"}</strong> 要求を被写体・衣装・構図・照明・画質へ内部整理します。標準では成人向けの露骨な表現も許可されます。</p>
           <form className="image-guidance-form" onSubmit={saveImageGuidance}>
             <fieldset className="image-setting-group">
               <legend>画像生成サービス</legend>
@@ -94,7 +94,7 @@ export function SettingsScreen() {
             <fieldset className="image-setting-group">
               <legend>安全レベル</legend>
               <div className="image-option-grid">
-                <label className={imageSafetyLevel === "standard" ? "is-selected" : ""}><input type="radio" name="image-safety-level" value="standard" checked={imageSafetyLevel === "standard"} onChange={() => setImageSafetyLevel("standard")} /><strong>標準</strong><small>成人の官能的・非露骨な表現に対応</small></label>
+                <label className={imageSafetyLevel === "standard" ? "is-selected" : ""}><input type="radio" name="image-safety-level" value="standard" checked={imageSafetyLevel === "standard"} onChange={() => setImageSafetyLevel("standard")} /><strong>標準</strong><small>成人の官能的・露骨な表現（性器・性行為を含む）に対応</small></label>
                 <label className={imageSafetyLevel === "strict" ? "is-selected" : ""}><input type="radio" name="image-safety-level" value="strict" checked={imageSafetyLevel === "strict"} onChange={() => setImageSafetyLevel("strict")} /><strong>厳しめ</strong><small>日常的で露出を抑えた表現</small></label>
               </div>
             </fieldset>
@@ -111,7 +111,7 @@ export function SettingsScreen() {
             <textarea id="image-guidance" value={imageGuidance} onChange={(event) => setImageGuidance(event.target.value)} maxLength={500} placeholder="例：夜の部屋、落ち着いた照明、大人っぽい服装…" />
             <button type="submit">{imageSaved ? "保存しました" : "画像設定を保存"}</button>
           </form>
-          <p className="settings-policy-note">成人のロマンチック・官能的な表現に対応します。安全規制の回避、露骨な性行為、露出した性器、未成年・年齢不明・非同意、実在人物の性的画像は対象外です。</p>
+          <p className="settings-policy-note">標準設定では、架空の成人キャラクターに限り全裸・性器・性行為を含む画像要求にも対応します。未成年・年齢不明・非同意・実在人物の性的画像、安全規制の回避指示は対象外です。</p>
         </div>
 
         <div className="settings-section">
