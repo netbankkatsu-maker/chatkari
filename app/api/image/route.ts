@@ -77,7 +77,9 @@ export async function POST(request: Request) {
       appearance: character.appearance,
       age: character.age,
     });
-    const prompt = `${identity}\n${scene}\n${adultStyle}\nKeep the locked identity for face, age, hairstyle and body. Only clothing, pose and location may change. Output one single photograph of one woman. No collage, no split image, no extra person, no second head.\nlook ${character.age} years old, realistic smartphone photography, no text, no watermark`;
+    const prompt = (clothingMode === "explicit" || clothingMode === "nude")
+      ? scene
+      : `${identity}\n${scene}\n${adultStyle}\nKeep the locked identity for face, age, hairstyle and body. Only clothing, pose and location may change. Output one single photograph of one woman. No collage, no split image, no extra person, no second head.\nlook ${character.age} years old, realistic smartphone photography, no text, no watermark`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
     const referenceImage = referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined;
     const modelsLabFallback = async () => {
@@ -97,6 +99,7 @@ export async function POST(request: Request) {
         samples: 1,
         referenceImage: modelslabReference,
         enableSafetyChecker: imageSettings.safetyLevel === "strict",
+        nsfwModel: clothingMode === "explicit" || clothingMode === "nude",
       });
     };
 
