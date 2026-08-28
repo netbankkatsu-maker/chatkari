@@ -1,6 +1,7 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
+import { playLoras, playPromptAddons, resolvePlayCategories } from "@/lib/image-play";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
     const customImagePrompt = String(body.customImagePrompt || "").slice(0, 500);
     const recentContext = String(body.recentContext || "").slice(0, 1200);
     const photoDescription = String(body.photoDescription || "").slice(0, 500);
+    const play = isProfile ? [] : resolvePlayCategories(`${requestText}\n${customImagePrompt}\n${photoDescription}\n${recentContext}`);
     const clothingMode = isProfile ? "clothed" : resolveClothingMode(requestText, customImagePrompt, imageSettings.safetyLevel, recentContext);
     const optimizedRequest = isProfile ? "" : buildOptimizedImageRequest({
       requestText,
@@ -62,36 +64,39 @@ export async function POST(request: Request) {
     });
     const scene = isProfile
       ? "friendly profile portrait for a fictional AI matching app, looking at camera, clean softly lit background, tasteful everyday outfit"
-      : optimizedRequest;
+      : [optimizedRequest, playPromptAddons(play)].filter(Boolean).join("\n");
     const adultStyle = isProfile || imageSettings.safetyLevel === "strict"
       ? "tasteful everyday portrait, fully clothed, one person only"
-      : clothingMode === "explicit"
-        ? "adult sexual photograph of one woman matching the user request, no collage"
+      : play.includes("lingerie") && !play.includes("nude")
+        ? "single photo of one woman wearing bra and panties, underwear on"
+        : clothingMode === "explicit" || play.some((id) => id !== "lingerie")
+        ? "adult photograph of one woman matching the requested act, no collage"
         : clothingMode === "nude"
-        ? "single photo of one woman, nude only because the user asked, no collage, no second person"
+        ? "single photo of one woman, nude only because the user asked, no collage"
         : clothingMode === "lingerie"
           ? "single photo of one woman wearing bra and panties, underwear on, not nude, no collage"
-          : "single photo of one clothed woman; wear exactly the clothes named in the photo description; do not invent a different outfit or landscape";
+          : "single photo of one clothed woman; wear exactly the clothes named in the photo description";
     const identity = buildIdentityLock({
       imagePrompt: character.imagePrompt,
       appearance: character.appearance,
       age: character.age,
     });
-    const prompt = (clothingMode === "explicit" || clothingMode === "nude")
-      ? scene
-      : `${identity}\n${scene}\n${adultStyle}\nKeep the locked identity for face, age, hairstyle and body. Only clothing, pose and location may change. Output one single photograph of one woman. No collage, no split image, no extra person, no second head.\nlook ${character.age} years old, realistic smartphone photography, no text, no watermark`;
+    const prompt = `${identity}\n${scene}\n${adultStyle}\nsolo, 1girl, only one woman. Two arms, two legs, two breasts only, one head.\nlook ${character.age} years old, realistic smartphone photography`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
-    const referenceImage = referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined;
+    const referenceImage = (clothingMode === "explicit" || clothingMode === "nude" || play.length > 0)
+      ? undefined
+      : (referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined);
     const modelsLabFallback = async () => {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
       const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
-      const anatomyNegative = "two heads, extra head, second face, multiple faces, extra arms, two women, multiple people, collage, split screen, photo grid, triptych, montage, giant, elongated body";
-      const clothingNegative = (clothingMode === "nude" || clothingMode === "explicit")
-        ? ""
-        : clothingMode === "lingerie"
-          ? "nude, naked, fully nude, topless, bottomless, visible genitals"
-          : "nude, naked, fully nude, unexpected nudity, lingerie unless requested";
+      const anatomyNegative = "2girls, two women, two heads, extra arms, extra breasts, third breast, collage, giant, elongated body";
+      const clothingNegative = play.includes("lingerie") && !play.includes("nude")
+        ? "fully nude"
+        : clothingMode === "clothed" && play.length === 0
+          ? "nude, naked, fully nude"
+          : "extra breasts, two heads";
       const negativePrompt = `${baseNegative}, ${anatomyNegative}, ${clothingNegative}`;
+      const loras = playLoras(play);
       return generateModelsLabImages({
         prompt,
         negativePrompt,
@@ -99,11 +104,13 @@ export async function POST(request: Request) {
         samples: 1,
         referenceImage: modelslabReference,
         enableSafetyChecker: imageSettings.safetyLevel === "strict",
-        nsfwModel: clothingMode === "explicit" || clothingMode === "nude",
+        nsfwModel: clothingMode === "explicit" || clothingMode === "nude" || play.some((id) => id !== "lingerie"),
+        loraModel: loras.loraModel,
+        loraStrength: loras.loraStrength,
       });
     };
 
-    if (imageSettings.provider === "modelslab" || clothingMode === "explicit" || clothingMode === "nude") {
+    if (imageSettings.provider === "modelslab" || clothingMode === "explicit" || clothingMode === "nude" || play.length > 0) {
       const generated = await modelsLabFallback();
       return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
     }
@@ -122,39 +129,19 @@ export async function POST(request: Request) {
       : generationPayload;
 
     let result: ImageResponse;
-    let referenceUsed = Boolean(referenceImage);
     try {
       result = await xaiFetch<ImageResponse>(path, payload, 90_000);
     } catch (error) {
-      console.warn("[api/image] primary request failed", {
-        characterId: character.id,
-        mode: body.mode || "chat",
-        operation: referenceImage ? "edit" : "generation",
-        status: error instanceof XaiApiError ? error.status : 500,
-        promptLength: prompt.length,
-      });
-      const canFallBackToGeneration = Boolean(referenceImage)
-        && !(error instanceof XaiApiError && [401, 403, 429, 504].includes(error.status));
-      if (canFallBackToGeneration) {
-        referenceUsed = false;
-        try {
-          result = await xaiFetch<ImageResponse>("/images/generations", generationPayload, 90_000);
-        } catch (generationError) {
-          const generated = await modelsLabFallback();
-          return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
-        }
-      } else {
-        try {
-          const generated = await modelsLabFallback();
-          return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
-        } catch {
-          throw error;
-        }
+      try {
+        const generated = await modelsLabFallback();
+        return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
+      } catch {
+        throw error;
       }
     }
     const imageUrl = result.data?.[0]?.file_output?.public_url || result.data?.[0]?.url;
     if (!imageUrl) throw new Error("Missing generated image URL");
-    return Response.json({ imageUrl, imageUrls: [imageUrl], provider: "xai", referenceAttempted: Boolean(referenceImage), referenceUsed });
+    return Response.json({ imageUrl, imageUrls: [imageUrl], provider: "xai", referenceAttempted: Boolean(referenceImage), referenceUsed: Boolean(referenceImage) });
   } catch (error) {
     if (error instanceof UnsafeImagePromptError) return Response.json({ error: error.message }, { status: 400 });
     if (error instanceof ModelsLabApiError) {
@@ -165,7 +152,7 @@ export async function POST(request: Request) {
       if (/nsfw content detected|nsfw_content_detected|safety checker flagged/i.test(detail)) {
         return Response.json({ error: `画像生成サービス側で内容が制限されました。${detail}`.slice(0, 180) }, { status: 400 });
       }
-      return Response.json({ error: detail || "ModelsLabで画像を生成できませんでした。設定またはモデルを確認してください。" }, { status: 502 });
+      return Response.json({ error: detail || "ModelsLabで画像を生成できませんでした。" }, { status: 502 });
     }
     const response = publicApiError(error, "画像の生成に失敗しました。もう一度試してください。");
     return Response.json({ error: response.message }, { status: response.status });
