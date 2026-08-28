@@ -42,9 +42,9 @@ function visualRewrite(value: string, safetyLevel: ImageSafetyLevel) {
 }
 
 function extractSceneHints(text: string) {
-  const clothingMatch = text.match(/(服|服装|衣装|ニット|セーター|ブラウス|シャツ|パーカー|コート|ワンピース|スカート|デニム|ジーンズ|レギンス|部屋着|パジャマ|水着|下着|パンツ|ブラ|ランジェリー|全裸|裸|ヌード)[^。\n]{0,50}/);
-  const poseMatch = text.match(/(ポーズ|座って|立って|寝転|ゴロゴロ|歩いて|こちらを見て|微笑|笑顔|腕組み|ピース|振り返)[^。\n]{0,30}/);
-  const placeMatch = text.match(/(部屋|キッチン|庭|畑|街|海|カフェ|ベッド|公園|屋外|室内)[^。\n]{0,30}/);
+  const clothingMatch = text.match(/(白(?:い)?(?:ブラウス|シャツ)|服|服装|衣装|ニット|セーター|ブラウス|シャツ|パーカー|コート|ワンピース|スカート|デニム|ジーンズ|レギンス|部屋着|パジャマ|水着|下着|パンツ|ブラ|ランジェリー|全裸|裸|ヌード)[^。\n]{0,50}/);
+  const poseMatch = text.match(/(ポーズ|座って|立って|寝転|ゴロゴロ|歩いて|こちらを見て|微笑|笑顔|自然な笑顔|腕組み|ピース|振り返)[^。\n]{0,30}/);
+  const placeMatch = text.match(/(ベランダ|バルコニー|窓際|リビング|玄関|廊下|部屋|キッチン|庭|畑|街|海|カフェ|ベッド|公園|屋外|室内|山|湖|川)[^。\n]{0,30}/);
   return {
     clothing: clothingMatch?.[0]?.trim(),
     pose: poseMatch?.[0]?.trim(),
@@ -64,18 +64,26 @@ export function wantsExplicitAdultImage(requestText: string, customImagePrompt: 
   return resolveClothingMode(requestText, customImagePrompt) !== "clothed";
 }
 
+function stripWardrobeFromIdentity(value: string) {
+  return value
+    .replace(/,?\s*(pastel knit top|fashionable casual clothing|modest feminine clothing|casual everyday clothing|trendy modern outfit|simple monochrome fashion|casual simple fashion|soft feminine casual clothing|modest soft-colored clothing|clean minimalist fashion|sophisticated office casual fashion)[^,]*/gi, "")
+    .replace(/,?\s*(ニット|ブラウス|シャツ|パーカー|スカート|デニム|ワンピース|カーディガン)[^,]*/g, "")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*,/g, ",")
+    .trim();
+}
+
 export function buildIdentityLock(input: {
   imagePrompt: string;
   appearance: string;
   age: number;
 }) {
   return [
-    "[IDENTITY LOCK — KEEP IN EVERY PHOTO]",
-    input.imagePrompt,
-    `age: ${input.age}-year-old adult woman, look her actual age, mature face, not a teenager, not early-20s`,
+    "[IDENTITY LOCK — FACE, AGE, HAIR, BODY ONLY]",
+    stripWardrobeFromIdentity(input.imagePrompt),
+    `age: ${input.age}-year-old adult woman, look her actual age`,
     `face and body: ${input.appearance}`,
-    "same person every time: keep the same face, same short hairstyle if the profile says short hair, same body type, same apparent age",
-    "do not replace her with a different younger woman, do not give her long hair if the profile is a short bob",
+    "same person every time. Do not change her face. Clothing is NOT part of identity and must follow the photo description.",
   ].join("\n");
 }
 
@@ -83,6 +91,7 @@ export function buildOptimizedImageRequest(input: {
   requestText: string;
   customImagePrompt: string;
   recentContext: string;
+  photoDescription?: string;
   safetyLevel?: ImageSafetyLevel;
   characterAppearance?: string;
   characterFashion?: string;
@@ -95,7 +104,9 @@ export function buildOptimizedImageRequest(input: {
   const dependsOnContext = /(?:それ|これ|さっき|直前|今の|この流れ|会話).{0,20}(?:画像|写真|イラスト|絵|生成|描)/.test(requestText);
   if (dependsOnContext) assertAllowed(input.recentContext, safetyLevel);
   const clothingMode = resolveClothingMode(requestText, customImagePrompt, safetyLevel);
+  const photoDescription = (input.photoDescription || input.recentContext.split("\n").filter((line) => /^assistant:/.test(line)).at(-1) || "").replace(/^assistant:\s*/, "").trim().slice(0, 500);
   const requestHints = extractSceneHints(`${requestText}\n${customImagePrompt}`);
+  const photoHints = extractSceneHints(photoDescription);
   const contextHints = extractSceneHints(input.recentContext);
   const safeContext = input.recentContext
     .split("\n")
@@ -110,9 +121,9 @@ export function buildOptimizedImageRequest(input: {
     ? "fully nude as the user requested, still one complete human body"
     : clothingMode === "lingerie"
       ? (requestHints.clothing || "matching bra and panties / lingerie, underwear on, nipples and genitals covered by fabric, not nude")
-      : (requestHints.clothing || contextHints.clothing || input.characterFashion || "everyday casual clothing that fully covers the torso and lower body");
-  const poseLine = requestHints.pose || contextHints.pose || "natural standing or sitting pose, one person only";
-  const placeLine = requestHints.place || contextHints.place || "a simple indoor room matching the conversation";
+      : (requestHints.clothing || photoHints.clothing || contextHints.clothing || input.characterFashion || "everyday casual clothing that fully covers the torso and lower body");
+  const poseLine = requestHints.pose || photoHints.pose || contextHints.pose || "natural standing or sitting pose, one person only";
+  const placeLine = requestHints.place || photoHints.place || contextHints.place || "a simple indoor room matching the conversation";
 
   const contentBoundary = clothingMode === "nude"
     ? "nude is allowed only because the user asked; still one woman, one head, one face; no collage; no minors; no real people"
@@ -123,8 +134,9 @@ export function buildOptimizedImageRequest(input: {
   return [
     "[REQUEST]",
     request,
+    photoDescription ? `[THIS PHOTO MUST MATCH THIS DESCRIPTION]\n${photoDescription}` : "",
     guidance ? `[USER STYLE PREFERENCE]\n${guidance}` : "",
-    safeContext ? `[CONVERSATION HINTS — clothing/pose only, not a license to change identity or undress]\n${safeContext}` : "",
+    safeContext ? `[CONVERSATION HINTS]\n${safeContext}` : "",
     "[MUST FOLLOW]",
     `clothing mode: ${clothingMode}`,
     `clothing: ${clothingLine}`,
@@ -133,7 +145,7 @@ export function buildOptimizedImageRequest(input: {
     input.characterAppearance ? `body: adult woman, ${input.characterAppearance}, normal human proportions` : "body: one adult woman, normal human proportions",
     "anatomy: exactly one woman, one head, one face, two eyes, two arms, two hands, two legs; no extra people; no collage; no split screen; no photo grid",
     "[CONTEXT RULE]",
-    "Generate a single smartphone photo of one woman. Never output two or three people in one frame. Never ignore specified clothes. Lingerie means underwear on, not nude.",
+    "Generate a single smartphone photo of one woman. The photo description from the character is the source of truth for clothing, place, hair styling and expression. Do not invent a lake, mountains, or a different outfit.",
     "[ART DIRECTION]",
     "one single photograph, not a collage, correct anatomy, realistic scale, clear lighting",
     "[SUBJECT & CONSENT]",
