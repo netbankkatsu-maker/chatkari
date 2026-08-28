@@ -76,7 +76,7 @@ export async function generateModelsLabImages(input: {
     num_inference_steps: 28,
     safety_checker: input.enableSafetyChecker ? "yes" : "no",
     seed: null,
-    guidance_scale: 7.5,
+    guidance_scale: 8.5,
     clip_skip: 2,
     scheduler: "UniPCMultistepScheduler",
     base64: false,
@@ -127,6 +127,7 @@ export async function generateModelsLabImages(input: {
 }
 
 export const MODELSLAB_NEGATIVE_PROMPT = [
+  "2girls", "two girls", "two women", "multiple girls", "couple", "twins",
   "minor", "child", "teen", "underage", "school uniform",
   "non-consensual", "coercion", "rape", "voyeurism", "unconscious person",
   "real person", "celebrity", "public figure",
@@ -134,7 +135,7 @@ export const MODELSLAB_NEGATIVE_PROMPT = [
   "extra fingers", "missing fingers", "fused fingers", "mutated hands", "bad hands",
   "extra limbs", "extra arms", "three arms", "four arms", "extra legs", "fused limbs",
   "two heads", "extra head", "second face", "multiple faces", "double face", "cloned face",
-  "conjoined", "two people", "two women", "multiple people", "clone", "duplicate face",
+  "conjoined", "two people", "clone", "duplicate face",
   "third breast", "extra breasts", "four breasts", "extra nipple", "tumor on torso",
   "deformed chest", "asymmetric monstrous body", "hollow torso", "missing limb",
   "collage", "split screen", "photo grid", "triptych", "montage",
