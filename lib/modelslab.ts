@@ -64,7 +64,7 @@ export async function generateModelsLabImages(input: {
     model_id: MODELS[input.style],
     prompt: input.style === "anime" ? `high quality detailed anime illustration, ${input.prompt}` : input.prompt,
     negative_prompt: input.negativePrompt,
-    enhance_prompt: "yes",
+    enhance_prompt: "no",
     width: 768,
     height: 1024,
     samples,
@@ -119,6 +119,8 @@ export const MODELSLAB_NEGATIVE_PROMPT = [
   "real person", "celebrity", "public figure",
   "low quality", "blurry", "bad anatomy", "deformed", "extra fingers", "extra limbs",
   "extra arms", "three arms", "four arms", "mutated hands", "fused limbs",
+  "two heads", "extra head", "second face", "multiple faces", "double face",
+  "conjoined", "two people", "clone", "duplicate face",
   "giant", "unrealistically tall", "elongated body", "stretched torso",
   "duplicate person", "watermark", "text", "logo",
 ].join(", ");
