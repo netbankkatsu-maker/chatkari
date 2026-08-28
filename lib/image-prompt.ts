@@ -26,15 +26,16 @@ function assertAllowed(value: string, safetyLevel: ImageSafetyLevel) {
   if (safetyLevel === "strict" && strictAdultPattern.test(value)) throw new UnsafeImagePromptError("厳しめ設定では露出や官能的・露骨な画像は生成できません。標準設定にするか、日常的な内容へ変更してください。");
 }
 
-function visualRewrite(value: string, safetyLevel: ImageSafetyLevel) {
+function visualRewrite(value: string) {
   return value.replace(/\s+/g, " ").trim().slice(0, 600);
 }
 
 function extractSceneHints(text: string) {
-  const clothingMatch = text.match(/(白(?:い)?(?:ブラウス|シャツ)|服|服装|衣装|ニット|セーター|ブラウス|シャツ|パーカー|コート|ワンピース|スカート|デニム|ジーンズ|レギンス|部屋着|パジャマ|水着|下着|パンツ|ランジェリー|全裸|裸|ヌード)[^。\n]{0,50}/);
+  const clothingMatch = text.match(/(白(?:い)?(?:ブラウス|シャツ)|服|服装|衣装|ニット|セーター|ブラウス|シャツ|パーカー|コート|ワンピース|スカート|デニム|ジーンズ|レギンス|部屋着|パジャマ|水着|下着|パンツ|ブラジャー|ブラ(?!ウス)|ランジェリー|全裸|裸|ヌード)[^。\n]{0,50}/);
   const poseMatch = text.match(/(ポーズ|座って|立って|寝転|ゴロゴロ|歩いて|こちらを見て|微笑|笑顔|自然な笑顔|腕組み|ピース|振り返)[^。\n]{0,30}/);
   const placeMatch = text.match(/(ベランダ|バルコニー|窓際|リビング|玄関|廊下|部屋|キッチン|庭|畑|街|海|カフェ|ベッド|公園|屋外|室内|山|湖|川)[^。\n]{0,30}/);
-  return { clothing: clothingMatch?.[0]?.trim(), pose: poseMatch?.[0]?.trim(), place: placeMatch?.[0]?.trim() };
+  const playMatch = text.match(/(バイブ|ディルド|挿入|精液|ぶっかけ|顔射|中出し|フェラ|セックス|性器|拡げ)[^。\n]{0,40}/);
+  return { clothing: clothingMatch?.[0]?.trim(), pose: poseMatch?.[0]?.trim(), place: placeMatch?.[0]?.trim(), play: playMatch?.[0]?.trim() };
 }
 
 export function resolveClothingMode(requestText: string, customImagePrompt: string, safetyLevel: ImageSafetyLevel = "standard", recentContext = ""): ClothingMode {
@@ -65,7 +66,7 @@ export function buildIdentityLock(input: { imagePrompt: string; appearance: stri
     stripWardrobeFromIdentity(input.imagePrompt),
     `age: ${input.age}-year-old adult woman, look her actual age`,
     `face and body: ${input.appearance}`,
-    "same person every time. Do not change her face. Clothing is NOT part of identity and must follow the photo description.",
+    "same person every time. Do not change her face. Clothing is NOT part of identity.",
   ].join("\n");
 }
 
@@ -83,40 +84,46 @@ export function buildOptimizedImageRequest(input: {
   const customImagePrompt = input.customImagePrompt.trim().slice(0, 500);
   const safetyLevel = input.safetyLevel === "strict" ? "strict" : "standard";
   assertAllowed(`${requestText}\n${customImagePrompt}`, safetyLevel);
-  const dependsOnContext = /(?:それ|これ|さっき|直前|今の|この流れ|会話).{0,20}(?:画像|写真|イラスト|絵|生成|描)/.test(requestText);
-  if (dependsOnContext) assertAllowed(input.recentContext, safetyLevel);
   const clothingMode = resolveClothingMode(requestText, customImagePrompt, safetyLevel, input.recentContext);
-  if (clothingMode === "explicit" || clothingMode === "nude") {
-    const source = `${requestText}\n${customImagePrompt}\n${input.recentContext}`;
-    const tags = ["1girl", "solo", `fictional adult Japanese woman age ${input.characterAge || 28}`, input.characterAppearance || "adult woman"];
-    if (/精液|ぶっかけ|射精|精子|顔射|bukkake|cum|ejacul/i.test(source)) tags.push("semen on face", "semen on body");
-    if (/性器|陰部|まんこ|おまんこ|拡げ|pussy|genital/i.test(source)) tags.push("nude", "visible vagina");
-    if (/フェラ|oral/i.test(source)) tags.push("fellatio");
-    if (/セックス|性交|挿入|中出し|バイブ|ディルド/i.test(source)) tags.push("sex toy insertion", "vibrator", "dildo");
-    if (clothingMode === "nude") tags.push("nude", "naked");
-    return [tags.join(", "), requestText, "one adult woman only, adult photograph, no collage, no extra people, no minors"].filter(Boolean).join("\n");
-  }
   const photoDescription = (input.photoDescription || input.recentContext.split("\n").filter((line) => /^assistant:/.test(line)).at(-1) || "").replace(/^assistant:\s*/, "").trim().slice(0, 500);
   const requestHints = extractSceneHints(`${requestText}\n${customImagePrompt}`);
   const photoHints = extractSceneHints(photoDescription);
   const contextHints = extractSceneHints(input.recentContext);
-  const safeContext = input.recentContext.split("\n").filter((line) => !evasionPattern.test(line) && !minorPattern.test(line) && !nonConsentPattern.test(line) && !realPersonSexualPattern.test(line)).join("\n").trim().slice(0, 400);
-  const request = visualRewrite(requestText || "a natural photo that fits the current conversation", safetyLevel);
-  const guidance = visualRewrite(customImagePrompt, safetyLevel);
-  const clothingLine = requestHints.clothing || photoHints.clothing || contextHints.clothing || input.characterFashion || "everyday casual clothing";
+  const request = visualRewrite(requestText || "a natural photo that fits the current conversation");
+  const guidance = visualRewrite(customImagePrompt);
+  const playLine = requestHints.play || photoHints.play || contextHints.play || "";
+  const userAskedNudeOrAct = nudeRequestPattern.test(requestText) || explicitSexualPattern.test(requestText) || Boolean(requestHints.play);
+  const userAskedLingerie = lingerieRequestPattern.test(requestText) && !nudeRequestPattern.test(requestText);
+  const aiOfferedLingerie = lingerieRequestPattern.test(photoDescription) && !userAskedNudeOrAct;
+  const clothingLine = userAskedLingerie || aiOfferedLingerie
+    ? (requestHints.clothing || photoHints.clothing || "bra and panties on, not nude")
+    : userAskedNudeOrAct || clothingMode === "nude" || clothingMode === "explicit"
+      ? (requestHints.clothing || "nude, natural adult female body, two breasts only")
+      : (requestHints.clothing || photoHints.clothing || contextHints.clothing || input.characterFashion || "everyday casual clothing");
   const poseLine = requestHints.pose || photoHints.pose || contextHints.pose || "natural standing or sitting pose, one person only";
   const placeLine = requestHints.place || photoHints.place || contextHints.place || "a simple indoor room matching the conversation";
+  const contentBoundary = userAskedLingerie || aiOfferedLingerie
+    ? "underwear/lingerie as specified; do not make her fully nude; one adult woman; no collage"
+    : userAskedNudeOrAct || clothingMode === "nude" || clothingMode === "explicit"
+      ? "show the requested adult act or nudity; keep correct human anatomy; one adult woman; no minors; no collage"
+      : "keep her clothed as specified; one adult woman; no collage";
   return [
-    "[REQUEST]", request,
-    photoDescription ? `[THIS PHOTO MUST MATCH THIS DESCRIPTION]\n${photoDescription}` : "",
+    "[IDENTITY]",
+    input.characterAppearance ? `adult woman, ${input.characterAppearance}` : "one adult woman",
+    input.characterAge ? `look ${input.characterAge} years old, age-appropriate face and body` : "look clearly over 25",
+    "[REQUEST]",
+    request,
+    playLine ? `[PLAY]\n${playLine}` : "",
+    photoDescription ? `[CHARACTER SAID THIS PHOTO IS]\n${photoDescription}` : "",
     guidance ? `[USER STYLE PREFERENCE]\n${guidance}` : "",
-    safeContext ? `[CONVERSATION HINTS]\n${safeContext}` : "",
     "[MUST FOLLOW]",
     `clothing: ${clothingLine}`,
     `pose: ${poseLine}`,
     `place: ${placeLine}`,
-    input.characterAppearance ? `body: adult woman, ${input.characterAppearance}` : "body: one adult woman",
-    "anatomy: exactly one woman, one head, one face, two arms, two legs; no collage",
-    "keep her clothed; do not make her nude; one woman only; no collage",
+    "anatomy: exactly one woman, one head, one face, two eyes, two arms, two hands, two legs, two breasts only, navel in the center, normal human proportions",
+    "[PRIORITY]",
+    "If the user named a sex act, clothing or toy, follow the user. If the user only asked for a photo, follow the character's last clothing and pose description.",
+    "[CONTENT BOUNDARY]",
+    contentBoundary,
   ].filter(Boolean).join("\n");
 }
