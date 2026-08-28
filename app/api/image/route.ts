@@ -1,6 +1,6 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
-import { buildOptimizedImageRequest, UnsafeImagePromptError, wantsExplicitAdultImage } from "@/lib/image-prompt";
+import { buildIdentityLock, buildOptimizedImageRequest, UnsafeImagePromptError, wantsExplicitAdultImage } from "@/lib/image-prompt";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -67,7 +67,12 @@ export async function POST(request: Request) {
         : explicitRequested
           ? "follow the user's requested clothing, pose and explicitness exactly; keep correct human anatomy"
           : "keep the character clothed in the requested or default everyday outfit; do not make her nude; obey the specified pose";
-    const prompt = `${character.imagePrompt}\n${scene}\n${adultStyle}\nUse the character description only for stable identity traits such as age, face, hair, height and build. Never invent extra arms, a second head, or an unnaturally tall giant body. The current scene request has priority for clothing, pose, expression, camera angle and location. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nexactly one woman, one head, one face, two arms and two legs, normal adult proportions, consistent facial identity, realistic smartphone photography, clearly an adult age ${character.age}, no text, no watermark`;
+    const identity = buildIdentityLock({
+      imagePrompt: character.imagePrompt,
+      appearance: character.appearance,
+      age: character.age,
+    });
+    const prompt = `${identity}\n${scene}\n${adultStyle}\nKeep the locked identity for face, age, hairstyle and body. Only clothing, pose and location may change. Never invent extra arms, a second head, or a giant body. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nexactly one woman, one head, one face, two arms and two legs, look ${character.age} years old, realistic smartphone photography, no text, no watermark`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
     const referenceImage = referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined;
     const modelsLabFallback = async () => {
