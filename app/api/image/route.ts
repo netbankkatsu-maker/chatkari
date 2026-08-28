@@ -65,7 +65,9 @@ export async function POST(request: Request) {
       : optimizedRequest;
     const adultStyle = isProfile || imageSettings.safetyLevel === "strict"
       ? "tasteful everyday portrait, fully clothed, one person only"
-      : clothingMode === "nude"
+      : clothingMode === "explicit"
+        ? "explicit adult sexual photograph of one woman matching the user request, including requested genitals, fluids or sex acts, no collage"
+        : clothingMode === "nude"
         ? "single photo of one woman, nude only because the user asked, no collage, no second person"
         : clothingMode === "lingerie"
           ? "single photo of one woman wearing bra and panties, underwear on, not nude, no collage"
@@ -82,7 +84,7 @@ export async function POST(request: Request) {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
       const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
       const anatomyNegative = "two heads, extra head, second face, multiple faces, extra arms, two women, multiple people, collage, split screen, photo grid, triptych, montage, giant, elongated body";
-      const clothingNegative = clothingMode === "nude"
+      const clothingNegative = (clothingMode === "nude" || clothingMode === "explicit")
         ? ""
         : clothingMode === "lingerie"
           ? "nude, naked, fully nude, topless, bottomless, visible genitals"
@@ -98,7 +100,7 @@ export async function POST(request: Request) {
       });
     };
 
-    if (imageSettings.provider === "modelslab") {
+    if (imageSettings.provider === "modelslab" || clothingMode === "explicit" || clothingMode === "nude") {
       const generated = await modelsLabFallback();
       return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
     }
