@@ -119,3 +119,8 @@ export const MODELSLAB_NEGATIVE_PROMPT = [
   "low quality", "blurry", "bad anatomy", "deformed", "extra fingers", "extra limbs",
   "duplicate person", "watermark", "text", "logo",
 ].join(", ");
+
+export const MODELSLAB_STRICT_NEGATIVE_PROMPT = [
+  MODELSLAB_NEGATIVE_PROMPT,
+  "nudity", "lingerie", "swimwear", "suggestive pose", "erotic framing", "fetishwear",
+].join(", ");

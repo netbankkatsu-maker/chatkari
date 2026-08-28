@@ -3,7 +3,7 @@ import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildOptimizedImageRequest, UnsafeImagePromptError } from "@/lib/image-prompt";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
-import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
+import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
 
 type ImageResponse = { data?: Array<{ url?: string; revised_prompt?: string; file_output?: { public_url?: string } }> };
 
@@ -50,12 +50,15 @@ export async function POST(request: Request) {
       requestText,
       customImagePrompt,
       recentContext: String(body.recentContext || "").slice(0, 1200),
+      safetyLevel: imageSettings.safetyLevel,
     });
     const scene = isProfile
       ? "friendly profile portrait for a fictional AI matching app, looking at camera, clean softly lit background, tasteful everyday outfit"
       : optimizedRequest;
     const adultStyle = isProfile
       ? "tasteful everyday portrait"
+      : imageSettings.safetyLevel === "strict"
+        ? "tasteful everyday fashion, non-sexual mood, full clothing coverage"
       : "adult, sensual and flirtatious mood when requested, elegant boudoir-inspired styling with tasteful coverage, no visible genitals, no explicit sexual acts";
     const prompt = `${character.imagePrompt}\n${scene}\n${adultStyle}\nUse the character description only for stable identity traits such as age, face, hair and build. The current scene request has priority for clothing, pose, expression, camera angle and location. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nconsistent facial identity, realistic smartphone photography, clearly an adult age ${character.age}, no text, no watermark`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
@@ -64,7 +67,7 @@ export async function POST(request: Request) {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
       const generated = await generateModelsLabImages({
         prompt,
-        negativePrompt: MODELSLAB_NEGATIVE_PROMPT,
+        negativePrompt: imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT,
         style: imageSettings.style,
         samples: isProfile ? 1 : imageSettings.samples,
         referenceImage: modelslabReference,

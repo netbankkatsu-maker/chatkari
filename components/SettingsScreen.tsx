@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { AppTabBar } from "@/components/AppTabBar";
-import { DEFAULT_IMAGE_SETTINGS, loadImageSettings, type ImageProvider, type ImageStyle } from "@/lib/image-settings";
+import { DEFAULT_IMAGE_SETTINGS, loadImageSettings, type ImageProvider, type ImageSafetyLevel, type ImageStyle } from "@/lib/image-settings";
 
 type BillingResult = {
   configured?: boolean;
@@ -22,6 +22,7 @@ export function SettingsScreen() {
   const [imageProvider, setImageProvider] = useState<ImageProvider>(DEFAULT_IMAGE_SETTINGS.provider);
   const [imageStyle, setImageStyle] = useState<ImageStyle>(DEFAULT_IMAGE_SETTINGS.style);
   const [imageSamples, setImageSamples] = useState(DEFAULT_IMAGE_SETTINGS.samples);
+  const [imageSafetyLevel, setImageSafetyLevel] = useState<ImageSafetyLevel>(DEFAULT_IMAGE_SETTINGS.safetyLevel);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -30,6 +31,7 @@ export function SettingsScreen() {
       setImageProvider(settings.provider);
       setImageStyle(settings.style);
       setImageSamples(settings.samples);
+      setImageSafetyLevel(settings.safetyLevel);
     });
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -40,6 +42,7 @@ export function SettingsScreen() {
     localStorage.setItem("chatkari:image-provider", imageProvider);
     localStorage.setItem("chatkari:image-style", imageStyle);
     localStorage.setItem("chatkari:image-samples", String(imageSamples));
+    localStorage.setItem("chatkari:image-safety-level", imageSafetyLevel);
     setImageSaved(true);
     window.setTimeout(() => setImageSaved(false), 1800);
   }
@@ -79,13 +82,20 @@ export function SettingsScreen() {
             <div><p className="eyebrow">IMAGE STYLE</p><h1>画像生成スタイル</h1></div>
           </div>
           <p className="settings-description">相手から届く画像の生成サービス、画風、枚数、雰囲気を設定できます。変更は次の画像生成から反映されます。</p>
-          <p className="image-optimizer-note"><strong>安全なプロンプト最適化：ON</strong> 要求を被写体・衣装・構図・照明・画質へ内部整理し、芸術写真／エディトリアル向けの表現に変換します。</p>
+          <p className="image-optimizer-note"><strong>安全レベル：{imageSafetyLevel === "standard" ? "標準" : "厳しめ"}</strong> 要求を被写体・衣装・構図・照明・画質へ内部整理し、安全な表現へ変換します。</p>
           <form className="image-guidance-form" onSubmit={saveImageGuidance}>
             <fieldset className="image-setting-group">
               <legend>画像生成サービス</legend>
               <div className="image-option-grid">
                 <label className={imageProvider === "xai" ? "is-selected" : ""}><input type="radio" name="image-provider" value="xai" checked={imageProvider === "xai"} onChange={() => setImageProvider("xai")} /><strong>xAI</strong><small>現在のGrok Imagine</small></label>
                 <label className={imageProvider === "modelslab" ? "is-selected" : ""}><input type="radio" name="image-provider" value="modelslab" checked={imageProvider === "modelslab"} onChange={() => setImageProvider("modelslab")} /><strong>ModelsLab</strong><small>会話連動の画像生成</small></label>
+              </div>
+            </fieldset>
+            <fieldset className="image-setting-group">
+              <legend>安全レベル</legend>
+              <div className="image-option-grid">
+                <label className={imageSafetyLevel === "standard" ? "is-selected" : ""}><input type="radio" name="image-safety-level" value="standard" checked={imageSafetyLevel === "standard"} onChange={() => setImageSafetyLevel("standard")} /><strong>標準</strong><small>成人の官能的・非露骨な表現に対応</small></label>
+                <label className={imageSafetyLevel === "strict" ? "is-selected" : ""}><input type="radio" name="image-safety-level" value="strict" checked={imageSafetyLevel === "strict"} onChange={() => setImageSafetyLevel("strict")} /><strong>厳しめ</strong><small>日常的で露出を抑えた表現</small></label>
               </div>
             </fieldset>
             <div className="image-settings-row">
