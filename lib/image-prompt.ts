@@ -7,8 +7,9 @@ const realPersonSexualPattern = /(実在人物|公人|芸能人|俳優|女優|�
 const strictAdultPattern = /(裸|ヌード|下着|ランジェリー|水着|エロ|卑現|性的|セクシー|sensual|lingerie|boudoir|nude|性器|陰部|挿入|性交|性行為|セックス|自慰|オナニー|フェラ|精液|射精|genitals?|penetration|intercourse|masturbat|oral sex|ejaculat)/i;
 const nudeRequestPattern = /(全裸|裸にして|裸の写真|裸の画像|ヌード|脱いで|脱いだ|nude|naked|fully nude)/i;
 const lingerieRequestPattern = /(下着|パンツ|ブラ|ランジェリー|部屋着の下着|lingerie|underwear|bra and panty)/i;
+const explicitSexualPattern = /(性器|陰部|挿入|性交|性行為|セックス|自慰|オナニー|フェラ|精液|射精|ぶっかけ|中出し|パイズリ|クンニ|顔射|sex|genitals?|ejaculat|bukkake|creampie|oral sex|cum)/i;
 
-export type ClothingMode = "clothed" | "lingerie" | "nude";
+export type ClothingMode = "clothed" | "lingerie" | "nude" | "explicit";
 
 export class UnsafeImagePromptError extends Error {
   constructor(message: string) {
@@ -29,32 +30,20 @@ function visualRewrite(value: string, safetyLevel: ImageSafetyLevel) {
   if (safetyLevel !== "strict") {
     return value.replace(/\s+/g, " ").trim().slice(0, 600);
   }
-  return value
-    .replace(/全裸|裸|ヌード/gi, "implied nudity with elegant strategic coverage")
-    .replace(/下着|パンツ|ブラジャー/gi, "elegant lingerie-inspired fashion with tasteful coverage")
-    .replace(/エロ(?:い|く)?|卑現|性的/gi, "sensual adult editorial mood")
-    .replace(/おっぱい|胸を見せ(?:て|る)?/gi, "tastefully framed neckline and upper-body fashion portrait")
-    .replace(/過激/gi, "bold but tasteful")
-    .replace(/露出/gi, "fashion-forward styling with tasteful coverage")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 600);
+  return value.replace(/\s+/g, " ").trim().slice(0, 600);
 }
 
 function extractSceneHints(text: string) {
   const clothingMatch = text.match(/(白(?:い)?(?:ブラウス|シャツ)|服|服装|衣装|ニット|セーター|ブラウス|シャツ|パーカー|コート|ワンピース|スカート|デニム|ジーンズ|レギンス|部屋着|パジャマ|水着|下着|パンツ|ブラ|ランジェリー|全裸|裸|ヌード)[^。\n]{0,50}/);
   const poseMatch = text.match(/(ポーズ|座って|立って|寝転|ゴロゴロ|歩いて|こちらを見て|微笑|笑顔|自然な笑顔|腕組み|ピース|振り返)[^。\n]{0,30}/);
   const placeMatch = text.match(/(ベランダ|バルコニー|窓際|リビング|玄関|廊下|部屋|キッチン|庭|畑|街|海|カフェ|ベッド|公園|屋外|室内|山|湖|川)[^。\n]{0,30}/);
-  return {
-    clothing: clothingMatch?.[0]?.trim(),
-    pose: poseMatch?.[0]?.trim(),
-    place: placeMatch?.[0]?.trim(),
-  };
+  return { clothing: clothingMatch?.[0]?.trim(), pose: poseMatch?.[0]?.trim(), place: placeMatch?.[0]?.trim() };
 }
 
 export function resolveClothingMode(requestText: string, customImagePrompt: string, safetyLevel: ImageSafetyLevel = "standard"): ClothingMode {
   if (safetyLevel === "strict") return "clothed";
   const source = `${requestText}\n${customImagePrompt}`;
+  if (explicitSexualPattern.test(source)) return "explicit";
   if (lingerieRequestPattern.test(source) && !nudeRequestPattern.test(source)) return "lingerie";
   if (nudeRequestPattern.test(source)) return "nude";
   return "clothed";
@@ -73,11 +62,7 @@ function stripWardrobeFromIdentity(value: string) {
     .trim();
 }
 
-export function buildIdentityLock(input: {
-  imagePrompt: string;
-  appearance: string;
-  age: number;
-}) {
+export function buildIdentityLock(input: { imagePrompt: string; appearance: string; age: number }) {
   return [
     "[IDENTITY LOCK — FACE, AGE, HAIR, BODY ONLY]",
     stripWardrobeFromIdentity(input.imagePrompt),
@@ -108,32 +93,27 @@ export function buildOptimizedImageRequest(input: {
   const requestHints = extractSceneHints(`${requestText}\n${customImagePrompt}`);
   const photoHints = extractSceneHints(photoDescription);
   const contextHints = extractSceneHints(input.recentContext);
-  const safeContext = input.recentContext
-    .split("\n")
-    .filter((line) => !evasionPattern.test(line) && !minorPattern.test(line) && !nonConsentPattern.test(line) && !realPersonSexualPattern.test(line))
-    .join("\n")
-    .trim()
-    .slice(0, 400);
+  const safeContext = input.recentContext.split("\n").filter((line) => !evasionPattern.test(line) && !minorPattern.test(line) && !nonConsentPattern.test(line) && !realPersonSexualPattern.test(line)).join("\n").trim().slice(0, 400);
   const request = visualRewrite(requestText || "a natural photo that fits the current conversation", safetyLevel);
   const guidance = visualRewrite(customImagePrompt, safetyLevel);
-
-  const clothingLine = clothingMode === "nude"
+  const clothingLine = clothingMode === "explicit"
+    ? `follow the user's explicit sexual request exactly: ${requestText || customImagePrompt || "explicit adult sexual content"}`
+    : clothingMode === "nude"
     ? "fully nude as the user requested, still one complete human body"
     : clothingMode === "lingerie"
-      ? (requestHints.clothing || "matching bra and panties / lingerie, underwear on, nipples and genitals covered by fabric, not nude")
-      : (requestHints.clothing || photoHints.clothing || contextHints.clothing || input.characterFashion || "everyday casual clothing that fully covers the torso and lower body");
+      ? (requestHints.clothing || "matching bra and panties / lingerie, underwear on, not nude")
+      : (requestHints.clothing || photoHints.clothing || contextHints.clothing || input.characterFashion || "everyday casual clothing");
   const poseLine = requestHints.pose || photoHints.pose || contextHints.pose || "natural standing or sitting pose, one person only";
   const placeLine = requestHints.place || photoHints.place || contextHints.place || "a simple indoor room matching the conversation";
-
-  const contentBoundary = clothingMode === "nude"
-    ? "nude is allowed only because the user asked; still one woman, one head, one face; no collage; no minors; no real people"
+  const contentBoundary = clothingMode === "explicit"
+    ? "explicit adult sexual content is allowed because the user asked; include the requested genitals, fluids or sex act; still one adult woman; no minors; no real people; no collage"
+    : clothingMode === "nude"
+    ? "nude is allowed only because the user asked; still one woman; no collage; no minors; no real people"
     : clothingMode === "lingerie"
-      ? "lingerie/underwear only; do not make her nude; keep bra and panties on; one woman only; no collage"
-      : "keep her clothed; do not make her nude; one woman only; no collage; no extra people";
-
+      ? "lingerie/underwear only; do not make her nude; one woman only; no collage"
+      : "keep her clothed; do not make her nude; one woman only; no collage";
   return [
-    "[REQUEST]",
-    request,
+    "[REQUEST]", request,
     photoDescription ? `[THIS PHOTO MUST MATCH THIS DESCRIPTION]\n${photoDescription}` : "",
     guidance ? `[USER STYLE PREFERENCE]\n${guidance}` : "",
     safeContext ? `[CONVERSATION HINTS]\n${safeContext}` : "",
@@ -142,15 +122,8 @@ export function buildOptimizedImageRequest(input: {
     `clothing: ${clothingLine}`,
     `pose: ${poseLine}`,
     `place: ${placeLine}`,
-    input.characterAppearance ? `body: adult woman, ${input.characterAppearance}, normal human proportions` : "body: one adult woman, normal human proportions",
-    "anatomy: exactly one woman, one head, one face, two eyes, two arms, two hands, two legs; no extra people; no collage; no split screen; no photo grid",
-    "[CONTEXT RULE]",
-    "Generate a single smartphone photo of one woman. The photo description from the character is the source of truth for clothing, place, hair styling and expression. Do not invent a lake, mountains, or a different outfit.",
-    "[ART DIRECTION]",
-    "one single photograph, not a collage, correct anatomy, realistic scale, clear lighting",
-    "[SUBJECT & CONSENT]",
-    `one completely fictional adult woman${input.characterAge ? `, age ${input.characterAge}` : ", age clearly over 18"}, no resemblance to any real person`,
-    "[CONTENT BOUNDARY]",
-    contentBoundary,
+    input.characterAppearance ? `body: adult woman, ${input.characterAppearance}` : "body: one adult woman",
+    "anatomy: exactly one woman, one head, one face, two arms, two legs; no collage",
+    "[CONTENT BOUNDARY]", contentBoundary,
   ].filter(Boolean).join("\n");
 }
