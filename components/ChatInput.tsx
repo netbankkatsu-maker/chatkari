@@ -234,7 +234,7 @@ export function ChatInput({ disabled, onSend }: {
       <input ref={fileRef} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} disabled={disabled || preparing || recording} />
       <button className="attach-button" type="button" onClick={() => fileRef.current?.click()} disabled={disabled || preparing || recording} aria-label="画像を添付">{preparing ? "…" : "+"}</button>
       <button className={`voice-button${recording ? " is-recording" : ""}`} type="button" onClick={toggleRecording} disabled={disabled || preparing} aria-label={recording ? "録音を停止" : "ボイスメッセージを録音"} aria-pressed={recording}>{recording ? "■" : "●"}</button>
-      <input value={text} onChange={(event) => setText(event.target.value)} placeholder={recording ? "録音中…" : "メッセージ"} aria-label="メッセージ" maxLength={1000} disabled={disabled || recording} />
+      <input value={text} onChange={(event) => setText(event.target.value)} placeholder={recording ? "録音中…" : "メッセージ"} aria-label="メッセージ" maxLength={4000} disabled={disabled || recording} />
       <button className="send-button" type="submit" disabled={disabled || preparing || recording || (!text.trim() && !imageUrl && !voice)} aria-label="送信">↑</button>
     </form>
   );

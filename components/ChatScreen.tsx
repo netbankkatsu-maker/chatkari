@@ -114,7 +114,7 @@ export function ChatScreen({ character }: { character: Character }) {
         const transcriptionResponse = await fetch("/api/voice/transcribe", { method: "POST", body: form });
         const transcription = await transcriptionResponse.json() as { transcript?: string; error?: string };
         if (!transcriptionResponse.ok || !transcription.transcript) throw new Error(transcription.error || "声を聞き取れませんでした。もう一度試してください。");
-        messageText = [transcription.transcript, text].filter(Boolean).join("\n").slice(0, 1000);
+        messageText = [transcription.transcript, text].filter(Boolean).join("\n").slice(0, 4000);
         try {
           await saveAudio(userMessageId, voice.blob);
           storedUserAudio = true;

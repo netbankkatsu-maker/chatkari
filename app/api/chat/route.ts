@@ -4,9 +4,12 @@ import { sanitizeMemories, sanitizeRelationship } from "@/lib/conversation";
 import type { ChatMessageData } from "@/lib/types";
 import { CHAT_MODEL, publicApiError, xaiFetch } from "@/lib/xai";
 
-type ChatCompletion = { choices?: Array<{ message?: { content?: string } }> };
+type ChatCompletion = { choices?: Array<{ finish_reason?: string; message?: { content?: string } }> };
 
 const DATA_IMAGE_PATTERN = /^data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/=]+$/;
+const MAX_MESSAGE_CHARACTERS = 4000;
+
+export const maxDuration = 60;
 
 function safeUserImage(value: unknown) {
   if (typeof value !== "string" || value.length > 1_500_000 || !DATA_IMAGE_PATTERN.test(value)) return undefined;
@@ -28,20 +31,27 @@ export async function POST(request: Request) {
     const character = resolveCharacter(body.characterId, body.character);
     if (!character) return Response.json({ error: "キャラクターが見つかりません。" }, { status: 400 });
 
+    const latestRawUserMessage = Array.isArray(body.messages)
+      ? [...body.messages].reverse().find((message) => message?.role === "user" && typeof message.content === "string")
+      : undefined;
+    if (latestRawUserMessage && latestRawUserMessage.content.length > MAX_MESSAGE_CHARACTERS) {
+      return Response.json({ error: `メッセージは1〜${MAX_MESSAGE_CHARACTERS}文字で入力してください。` }, { status: 400 });
+    }
+
     const messages = Array.isArray(body.messages)
       ? body.messages.flatMap((message) => {
         if ((message.role !== "user" && message.role !== "assistant") || typeof message.content !== "string") return [];
         return [{
           role: message.role,
-          content: message.content.slice(0, 2000),
+          content: message.content.slice(0, MAX_MESSAGE_CHARACTERS),
           imageUrl: message.role === "user" ? safeUserImage(message.imageUrl) : undefined,
         }];
       }).slice(-30)
       : [];
     const latestUserMessage = [...messages].reverse().find((message) => message.role === "user");
     const latestUser = latestUserMessage?.content.trim() || (latestUserMessage?.imageUrl ? "画像を送ったよ" : "");
-    if (!latestUser || latestUser.length > 1000) {
-      return Response.json({ error: "メッセージは1〜1000文字で入力してください。" }, { status: 400 });
+    if (!latestUser) {
+      return Response.json({ error: `メッセージは1〜${MAX_MESSAGE_CHARACTERS}文字で入力してください。` }, { status: 400 });
     }
 
     const affection = Math.max(0, Math.min(100, Number(body.affection) || 20));
@@ -66,26 +76,44 @@ export async function POST(request: Request) {
       recentOpenings: recentAssistant.map((message) => message.content.trim().slice(0, 18)).filter(Boolean),
       imageClarificationNeeded: imageIntent.needsClarification,
     }) + (body.summary ? `\n古い会話の要約: ${String(body.summary).slice(0, 2000)}` : "");
+    const completionMessages = [
+      { role: "system", content: system },
+      ...messages.map((message) => message === latestUserMessage && message.imageUrl
+        ? {
+          role: message.role,
+          content: [
+            { type: "image_url", image_url: { url: message.imageUrl, detail: "low" } },
+            { type: "text", text: message.content || "この画像を見て、キャラクターらしく自然に反応して。" },
+          ],
+        }
+        : { role: message.role, content: message.content }),
+    ];
+    const maxTokens = replyLength === "short" ? 180 : replyLength === "long" ? 700 : 420;
     const result = await xaiFetch<ChatCompletion>("/chat/completions", {
       model: CHAT_MODEL,
-      messages: [
-        { role: "system", content: system },
-        ...messages.map((message) => message === latestUserMessage && message.imageUrl
-          ? {
-            role: message.role,
-            content: [
-              { type: "image_url", image_url: { url: message.imageUrl, detail: "low" } },
-              { type: "text", text: message.content || "この画像を見て、キャラクターらしく自然に反応して。" },
-            ],
-          }
-          : { role: message.role, content: message.content }),
-      ],
+      messages: completionMessages,
       store: false,
       temperature: 0.9,
-      max_tokens: replyLength === "short" ? 100 : replyLength === "long" ? 380 : 230,
+      max_tokens: maxTokens,
     }, 30_000);
-    const reply = result.choices?.[0]?.message?.content?.trim();
+    const firstChoice = result.choices?.[0];
+    let reply = firstChoice?.message?.content?.trim();
     if (!reply) throw new Error("Missing assistant message");
+    if (firstChoice?.finish_reason === "length") {
+      const continuationResult = await xaiFetch<ChatCompletion>("/chat/completions", {
+        model: CHAT_MODEL,
+        messages: [
+          ...completionMessages,
+          { role: "assistant", content: reply },
+          { role: "user", content: "直前の返答が途中で切れました。内容を繰り返さず、途切れた箇所の直後から自然に続け、文章を完結させてください。" },
+        ],
+        store: false,
+        temperature: 0.75,
+        max_tokens: 700,
+      }, 30_000);
+      const continuation = continuationResult.choices?.[0]?.message?.content?.trim();
+      if (continuation) reply += continuation;
+    }
 
     const blocksRejectedImage = character.adultTopicPolicy === "reject" && isAdultTopic(latestUser);
     return Response.json({

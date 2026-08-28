@@ -68,7 +68,7 @@ export async function generateModelsLabImages(input: {
     height: 1024,
     samples,
     num_inference_steps: 28,
-    safety_checker: "no",
+    safety_checker: "yes",
     seed: null,
     guidance_scale: 7.5,
     clip_skip: 2,
