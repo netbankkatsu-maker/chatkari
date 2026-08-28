@@ -120,7 +120,8 @@ export const MODELSLAB_NEGATIVE_PROMPT = [
   "low quality", "blurry", "bad anatomy", "deformed", "extra fingers", "extra limbs",
   "extra arms", "three arms", "four arms", "mutated hands", "fused limbs",
   "two heads", "extra head", "second face", "multiple faces", "double face",
-  "conjoined", "two people", "clone", "duplicate face",
+  "conjoined", "two people", "two women", "clone", "duplicate face",
+  "collage", "split screen", "photo grid", "triptych", "montage",
   "giant", "unrealistically tall", "elongated body", "stretched torso",
   "duplicate person", "watermark", "text", "logo",
 ].join(", ");
