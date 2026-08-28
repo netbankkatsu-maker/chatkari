@@ -60,6 +60,8 @@ export async function generateModelsLabImages(input: {
   referenceImage?: string;
   enableSafetyChecker?: boolean;
   nsfwModel?: boolean;
+  loraModel?: string;
+  loraStrength?: string;
 }) {
   const key = process.env.MODELSLAB_API_KEY;
   if (!key) throw new ModelsLabApiError(503, "MODELSLAB_API_KEY is not configured");
@@ -79,6 +81,8 @@ export async function generateModelsLabImages(input: {
     guidance_scale: 8.5,
     clip_skip: 2,
     scheduler: "UniPCMultistepScheduler",
+    lora_model: input.loraModel || null,
+    lora_strength: input.loraStrength || null,
     base64: false,
     temp: false,
     webhook: null,
