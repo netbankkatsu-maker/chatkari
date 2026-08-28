@@ -7,7 +7,7 @@ const realPersonSexualPattern = /(実在人物|公人|芸能人|俳優|女優|�
 const strictAdultPattern = /(裸|ヌード|下着|ランジェリー|水着|エロ|卑現|性的|セクシー|sensual|lingerie|boudoir|nude|性器|陰部|挿入|性交|性行為|セックス|自慰|オナニー|フェラ|精液|射精|genitals?|penetration|intercourse|masturbat|oral sex|ejaculat)/i;
 const nudeRequestPattern = /(全裸|裸にして|裸の写真|裸の画像|ヌード|脱いで|脱いだ|nude|naked|fully nude)/i;
 const lingerieRequestPattern = /(下着|パンツ|ブラジャー|ブラ(?!ウス)|ランジェリー|部屋着の下着|lingerie|underwear|bra and panty)/i;
-const explicitSexualPattern = /(性器|陰部|挿入|性交|性行為|セックス|自慰|オナニー|フェラ|精液|射精|ぶっかけ|中出し|パイズリ|クンニ|顔射|精子|おまんこ|まんこ|過激|sex|genitals?|ejaculat|bukkake|creampie|oral sex|cum)/i;
+const explicitSexualPattern = /(性器|陰部|挿入|性交|性行為|セックス|自慰|オナニー|フェラ|精液|射精|ぶっかけ|中出し|パイズリ|クンニ|顔射|精子|おまんこ|まんこ|過激|バイブ|ディルド|sex|genitals?|ejaculat|bukkake|creampie|oral sex|cum|vibrator|dildo)/i;
 
 export type ClothingMode = "clothed" | "lingerie" | "nude" | "explicit";
 
@@ -37,9 +37,9 @@ function extractSceneHints(text: string) {
   return { clothing: clothingMatch?.[0]?.trim(), pose: poseMatch?.[0]?.trim(), place: placeMatch?.[0]?.trim() };
 }
 
-export function resolveClothingMode(requestText: string, customImagePrompt: string, safetyLevel: ImageSafetyLevel = "standard"): ClothingMode {
+export function resolveClothingMode(requestText: string, customImagePrompt: string, safetyLevel: ImageSafetyLevel = "standard", recentContext = ""): ClothingMode {
   if (safetyLevel === "strict") return "clothed";
-  const source = `${requestText}\n${customImagePrompt}`;
+  const source = `${requestText}\n${customImagePrompt}\n${recentContext}`;
   if (explicitSexualPattern.test(source)) return "explicit";
   if (lingerieRequestPattern.test(source) && !nudeRequestPattern.test(source)) return "lingerie";
   if (nudeRequestPattern.test(source)) return "nude";
@@ -85,16 +85,16 @@ export function buildOptimizedImageRequest(input: {
   assertAllowed(`${requestText}\n${customImagePrompt}`, safetyLevel);
   const dependsOnContext = /(?:それ|これ|さっき|直前|今の|この流れ|会話).{0,20}(?:画像|写真|イラスト|絵|生成|描)/.test(requestText);
   if (dependsOnContext) assertAllowed(input.recentContext, safetyLevel);
-  const clothingMode = resolveClothingMode(requestText, customImagePrompt, safetyLevel);
+  const clothingMode = resolveClothingMode(requestText, customImagePrompt, safetyLevel, input.recentContext);
   if (clothingMode === "explicit" || clothingMode === "nude") {
-    const source = `${requestText}\n${customImagePrompt}`;
-    const tags = ["nsfw", "explicit", "uncensored", "1girl", "solo", `fictional adult Japanese woman age ${input.characterAge || 28}`, input.characterAppearance || "adult woman"];
-    if (/精液|ぶっかけ|射精|精子|顔射|bukkake|cum|ejacul/i.test(source)) tags.push("bukkake", "cum on face", "semen on body", "facial");
-    if (/性器|陰部|まんこ|おまんこ|pussy|genital/i.test(source)) tags.push("nude", "pussy visible", "vagina", "spread legs");
-    if (/フェラ|oral/i.test(source)) tags.push("fellatio", "oral sex");
-    if (/セックス|性交|挿入|中出し/i.test(source)) tags.push("sex", "penetration");
-    if (clothingMode === "nude") tags.push("completely nude", "naked");
-    return [tags.join(", "), requestText, "one adult woman only, uncensored explicit photograph, no collage, no extra people, no minors"].filter(Boolean).join("\n");
+    const source = `${requestText}\n${customImagePrompt}\n${input.recentContext}`;
+    const tags = ["1girl", "solo", `fictional adult Japanese woman age ${input.characterAge || 28}`, input.characterAppearance || "adult woman"];
+    if (/精液|ぶっかけ|射精|精子|顔射|bukkake|cum|ejacul/i.test(source)) tags.push("semen on face", "semen on body");
+    if (/性器|陰部|まんこ|おまんこ|拡げ|pussy|genital/i.test(source)) tags.push("nude", "visible vagina");
+    if (/フェラ|oral/i.test(source)) tags.push("fellatio");
+    if (/セックス|性交|挿入|中出し|バイブ|ディルド/i.test(source)) tags.push("sex toy insertion", "vibrator", "dildo");
+    if (clothingMode === "nude") tags.push("nude", "naked");
+    return [tags.join(", "), requestText, "one adult woman only, adult photograph, no collage, no extra people, no minors"].filter(Boolean).join("\n");
   }
   const photoDescription = (input.photoDescription || input.recentContext.split("\n").filter((line) => /^assistant:/.test(line)).at(-1) || "").replace(/^assistant:\s*/, "").trim().slice(0, 500);
   const requestHints = extractSceneHints(`${requestText}\n${customImagePrompt}`);
