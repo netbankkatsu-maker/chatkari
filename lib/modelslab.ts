@@ -54,6 +54,8 @@ export async function generateModelsLabImages(input: {
   style: ImageStyle;
   samples: number;
   referenceImage?: string;
+  /** strict のときだけ safety_checker を有効化。standard では露骨な成人向け生成を許可 */
+  enableSafetyChecker?: boolean;
 }) {
   const key = process.env.MODELSLAB_API_KEY;
   if (!key) throw new ModelsLabApiError(503, "MODELSLAB_API_KEY is not configured");
@@ -68,7 +70,7 @@ export async function generateModelsLabImages(input: {
     height: 1024,
     samples,
     num_inference_steps: 28,
-    safety_checker: "yes",
+    safety_checker: input.enableSafetyChecker ? "yes" : "no",
     seed: null,
     guidance_scale: 7.5,
     clip_skip: 2,
@@ -115,7 +117,7 @@ export async function generateModelsLabImages(input: {
 export const MODELSLAB_NEGATIVE_PROMPT = [
   "minor", "child", "teen", "underage", "young-looking", "school uniform",
   "non-consensual", "coercion", "rape", "voyeurism", "unconscious person",
-  "explicit sexual act", "visible genitals", "real person", "celebrity", "public figure",
+  "real person", "celebrity", "public figure",
   "low quality", "blurry", "bad anatomy", "deformed", "extra fingers", "extra limbs",
   "duplicate person", "watermark", "text", "logo",
 ].join(", ");
@@ -123,4 +125,5 @@ export const MODELSLAB_NEGATIVE_PROMPT = [
 export const MODELSLAB_STRICT_NEGATIVE_PROMPT = [
   MODELSLAB_NEGATIVE_PROMPT,
   "nudity", "lingerie", "swimwear", "suggestive pose", "erotic framing", "fetishwear",
+  "explicit sexual act", "visible genitals",
 ].join(", ");
