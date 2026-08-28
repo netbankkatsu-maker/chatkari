@@ -1,6 +1,6 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
-import { buildIdentityLock, buildOptimizedImageRequest, UnsafeImagePromptError, wantsExplicitAdultImage } from "@/lib/image-prompt";
+import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     const isProfile = body.mode === "profile";
     const customImagePrompt = String(body.customImagePrompt || "").slice(0, 500);
     const recentContext = String(body.recentContext || "").slice(0, 1200);
-    const explicitRequested = !isProfile && imageSettings.safetyLevel === "standard" && wantsExplicitAdultImage(requestText, customImagePrompt, recentContext);
+    const clothingMode = isProfile ? "clothed" : resolveClothingMode(requestText, customImagePrompt, imageSettings.safetyLevel);
     const optimizedRequest = isProfile ? "" : buildOptimizedImageRequest({
       requestText,
       customImagePrompt,
@@ -60,33 +60,36 @@ export async function POST(request: Request) {
     const scene = isProfile
       ? "friendly profile portrait for a fictional AI matching app, looking at camera, clean softly lit background, tasteful everyday outfit"
       : optimizedRequest;
-    const adultStyle = isProfile
-      ? "tasteful everyday portrait, fully clothed"
-      : imageSettings.safetyLevel === "strict"
-        ? "tasteful everyday fashion, non-sexual mood, full clothing coverage"
-        : explicitRequested
-          ? "follow the user's requested clothing, pose and explicitness exactly; keep correct human anatomy"
-          : "keep the character clothed in the requested or default everyday outfit; do not make her nude; obey the specified pose";
+    const adultStyle = isProfile || imageSettings.safetyLevel === "strict"
+      ? "tasteful everyday portrait, fully clothed, one person only"
+      : clothingMode === "nude"
+        ? "single photo of one woman, nude only because the user asked, no collage, no second person"
+        : clothingMode === "lingerie"
+          ? "single photo of one woman wearing bra and panties, underwear on, not nude, no collage"
+          : "single photo of one clothed woman, keep the requested or default outfit on, not nude, no collage";
     const identity = buildIdentityLock({
       imagePrompt: character.imagePrompt,
       appearance: character.appearance,
       age: character.age,
     });
-    const prompt = `${identity}\n${scene}\n${adultStyle}\nKeep the locked identity for face, age, hairstyle and body. Only clothing, pose and location may change. Never invent extra arms, a second head, or a giant body. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nexactly one woman, one head, one face, two arms and two legs, look ${character.age} years old, realistic smartphone photography, no text, no watermark`;
+    const prompt = `${identity}\n${scene}\n${adultStyle}\nKeep the locked identity for face, age, hairstyle and body. Only clothing, pose and location may change. Output one single photograph of one woman. No collage, no split image, no extra person, no second head.\nlook ${character.age} years old, realistic smartphone photography, no text, no watermark`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
     const referenceImage = referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined;
     const modelsLabFallback = async () => {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
       const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
-      const anatomyNegative = "two heads, extra head, second face, multiple faces, extra arms, giant, elongated body";
-      const negativePrompt = (isProfile || imageSettings.safetyLevel === "strict" || !explicitRequested)
-        ? `${baseNegative}, nude, naked, fully nude, unexpected nudity, ${anatomyNegative}`
-        : `${baseNegative}, ${anatomyNegative}`;
+      const anatomyNegative = "two heads, extra head, second face, multiple faces, extra arms, two women, multiple people, collage, split screen, photo grid, triptych, montage, giant, elongated body";
+      const clothingNegative = clothingMode === "nude"
+        ? ""
+        : clothingMode === "lingerie"
+          ? "nude, naked, fully nude, topless, bottomless, visible genitals"
+          : "nude, naked, fully nude, unexpected nudity, lingerie unless requested";
+      const negativePrompt = `${baseNegative}, ${anatomyNegative}, ${clothingNegative}`;
       return generateModelsLabImages({
         prompt,
         negativePrompt,
         style: imageSettings.style,
-        samples: isProfile ? 1 : imageSettings.samples,
+        samples: 1,
         referenceImage: modelslabReference,
         enableSafetyChecker: imageSettings.safetyLevel === "strict",
       });
