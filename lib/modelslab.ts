@@ -54,7 +54,6 @@ export async function generateModelsLabImages(input: {
   style: ImageStyle;
   samples: number;
   referenceImage?: string;
-  /** strict のときだけ safety_checker を有効化。standard では露骨な成人向け生成を許可 */
   enableSafetyChecker?: boolean;
 }) {
   const key = process.env.MODELSLAB_API_KEY;
@@ -119,6 +118,8 @@ export const MODELSLAB_NEGATIVE_PROMPT = [
   "non-consensual", "coercion", "rape", "voyeurism", "unconscious person",
   "real person", "celebrity", "public figure",
   "low quality", "blurry", "bad anatomy", "deformed", "extra fingers", "extra limbs",
+  "extra arms", "three arms", "four arms", "mutated hands", "fused limbs",
+  "giant", "unrealistically tall", "elongated body", "stretched torso",
   "duplicate person", "watermark", "text", "logo",
 ].join(", ");
 
