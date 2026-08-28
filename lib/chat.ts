@@ -63,34 +63,10 @@ export function characterPrompt(character: Character, affection: number, userDis
   const imageClarificationInstruction = context.imageClarificationNeeded
     ? "ユーザーは画像を見たがっていますが、内容がまだ曖昧です。今回は画像が決まったふりをせず、画風・人物・場所・服装のうち不足している最重要点を一つだけ、自然な口調で短く確認してください。"
     : "";
-  return `${BASE_SYSTEM_PROMPT}
-
-ユーザーが画像を送った場合は、画像内で実際に確認できる内容に触れ、キャラクターらしい自然な反応や感想を返してください。見えない内容を断定せず、個人の特定やセンシティブ属性の推測はしません。
-${adultTopicInstruction}
-${imageRequestInstruction}
-${userNameInstruction}
-${relationshipInstruction}
-${memoryInstruction}
-${lengthInstruction}
-${questionInstruction}
-${repetitionInstruction}
-${imageClarificationInstruction}
-
-【固定キャラクター設定】
-名前: ${character.name}
-年齢: ${character.age}歳
-職業: ${character.job}
-婚姻状況: ${character.maritalStatus}
-性格: ${character.personality.join("、")}
-趣味: ${character.hobbies.join("、")}
-恋愛傾向: ${character.romanceStyle}
-話し方: ${character.speakingStyle}
-外見: ${character.appearance}
-服装傾向: ${character.fashion}
-現在の好感度: ${affection}/100（会話段階: ${stage}）`;
+  return `${BASE_SYSTEM_PROMPT}\n\nユーザーが画像を送った場合は、画像内で実際に確認できる内容に触れ、キャラクターらしい自然な反応や感想を返してください。見えない内容を断定せず、個人の特定やセンシティブ属性の推測はしません。\n${adultTopicInstruction}\n${imageRequestInstruction}\n${userNameInstruction}\n${relationshipInstruction}\n${memoryInstruction}\n${lengthInstruction}\n${questionInstruction}\n${repetitionInstruction}\n${imageClarificationInstruction}\n\n【固定キャラクター設定】\n名前: ${character.name}\n年齢: ${character.age}歳\n職業: ${character.job}\n婚姻状況: ${character.maritalStatus}\n性格: ${character.personality.join("、")}\n趣味: ${character.hobbies.join("、")}\n恋愛傾向: ${character.romanceStyle}\n話し方: ${character.speakingStyle}\n外見: ${character.appearance}\n服装傾向: ${character.fashion}\n現在の好感度: ${affection}/100（会話段階: ${stage}）`;
 }
 
-const requestWords = /(写真|画像|自撮り|写メ|顔|服|部屋着|全裸|裸|ヌード|下着|性器|陰部)/;
+const requestWords = /(写真|画像|自撮り|写メ|顔|服|部屋着|全裸|裸|ヌード|下着|性器|陰部|精液|ぶっかけ|射精|セックス|フェラ|性行為|オナニー)/;
 const actionWords = /(送って|送れる|見せて|見たい|ちょうだい|ほしい|欲しい|撮って|どんな|見せられる)/;
 const questionOnly = /(好き|趣味|撮るの|よく撮)/;
 
@@ -99,7 +75,7 @@ export function isImageRequest(text: string) {
   return requestWords.test(normalized) && actionWords.test(normalized) && !questionOnly.test(normalized);
 }
 
-const directImageAction = /(画像|写真|自撮り|イラスト|絵|全裸|裸|ヌード|下着|性器).{0,18}(生成|作って|描いて|送って|見せて|見たい|にして)|(?:生成|描いて).{0,12}(画像|写真|イラスト|絵)/;
+const directImageAction = /(画像|写真|自撮り|イラスト|絵|全裸|裸|ヌード|下着|性器|精液|ぶっかけ|セックス|フェラ).{0,18}(生成|作って|描いて|送って|見せて|見たい|にして)|(?:生成|描いて).{0,12}(画像|写真|イラスト|絵)/;
 const visualDetails = /(黒髪|茶髪|金髪|大人の|女性|男性|ベッド|部屋|海|街|夜|昼|服|ドレス|下着|全裸|裸|ヌード|性器|ポーズ|座って|立って|寝転|リアル|アニメ|照明|背景|水着|デート)/;
 const followupEdit = /(もう少し|もっと|大胆に|控えめに|服装.{0,8}(変えて|替えて)|色.{0,8}(変えて|替えて)|同じ感じ|別パターン|違うポーズ)/;
 const contextualRender = /(?:それ|これ|さっき|直前|今の|この流れ|会話).{0,18}(?:画像|写真|イラスト|絵)?(?:にして|生成して|描いて|見せて)|^(?:画像|写真|イラスト|絵)?(?:を)?生成して[。！!]?$/;
@@ -120,7 +96,7 @@ export function imageGenerationIntent(latest: string, previousUserMessages: stri
 }
 
 const voiceWords = /(ボイスメッセージ|ボイス|音声|声)/;
-const voiceActions = /(送って|聞かせて|聞きたい|ちょうだい|ほしい|欲しい|話して|鐘って)/;
+const voiceActions = /(送って|聞かせて|聞きたい|ちょうだい|ほしい|欲しい|話して|嘗って)/;
 
 export function isVoiceRequest(text: string) {
   const normalized = text.replace(/\s/g, "");
