@@ -53,6 +53,21 @@ export function wantsExplicitAdultImage(requestText: string, customImagePrompt: 
   return explicitRequestPattern.test(`${requestText}\n${customImagePrompt}\n${recentContext}`);
 }
 
+export function buildIdentityLock(input: {
+  imagePrompt: string;
+  appearance: string;
+  age: number;
+}) {
+  return [
+    "[IDENTITY LOCK — KEEP IN EVERY PHOTO]",
+    input.imagePrompt,
+    `age: ${input.age}-year-old adult woman, look her age, not a teenager or early-20s face`,
+    `face and body: ${input.appearance}`,
+    "same person every time: keep the same face shape, eye shape, hairstyle length, body type and apparent age",
+    "do not replace her with a different younger woman",
+  ].join("\n");
+}
+
 export function buildOptimizedImageRequest(input: {
   requestText: string;
   customImagePrompt: string;
