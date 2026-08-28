@@ -204,7 +204,7 @@ export function ChatScreen({ character }: { character: Character }) {
         const imageResponse = await fetch("/api/image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ characterId: character.id, character, mode: "chat", requestText: text, recentContext, referenceImage, referenceSource, customImagePrompt: imageGuidance, imageSettings }),
+          body: JSON.stringify({ characterId: character.id, character, mode: "chat", requestText: text, recentContext, photoDescription: data.reply, referenceImage, referenceSource, customImagePrompt: imageGuidance, imageSettings }),
         });
         const imageData = await imageResponse.json() as { imageUrl?: string; imageUrls?: string[]; error?: string };
         if (!imageResponse.ok || !imageData.imageUrl) throw new Error(imageData.error || "画像の生成に失敗しました。もう一度試してください。");
