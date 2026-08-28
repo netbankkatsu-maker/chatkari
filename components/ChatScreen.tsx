@@ -20,6 +20,7 @@ import {
   type RelationshipState,
 } from "@/lib/conversation";
 import { loadImageSettings } from "@/lib/image-settings";
+import { chooseImageReference } from "@/lib/image-reference";
 
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const delay = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -193,9 +194,13 @@ export function ChatScreen({ character }: { character: Character }) {
         const imageSettings = loadImageSettings();
         const conversationWindow = nextMessages.slice(-10);
         const recentContext = [...conversationWindow.map((message) => `${message.role}: ${message.content}${message.imageUrl ? " [この発言には画像がある]" : ""}`), `assistant: ${data.reply}`].join("\n");
-        const conversationReference = [...conversationWindow].reverse().find((message) => message.imageUrl)?.imageUrl;
-        const referenceImage = conversationReference || profileUrl;
-        const referenceSource = conversationReference ? "conversation" : profileUrl ? "profile" : "none";
+        const conversationReference = [...conversationWindow].reverse().find((message) => message.id !== userMessage.id && message.imageUrl)?.imageUrl;
+        const { referenceImage, referenceSource } = chooseImageReference({
+          requestText: text,
+          attachedImage: imageUrl,
+          conversationImage: conversationReference,
+          profileImage: profileUrl,
+        });
         const imageResponse = await fetch("/api/image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

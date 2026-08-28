@@ -1,6 +1,7 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildOptimizedImageRequest, UnsafeImagePromptError } from "@/lib/image-prompt";
+import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
 
@@ -56,8 +57,9 @@ export async function POST(request: Request) {
     const adultStyle = isProfile
       ? "tasteful everyday portrait"
       : "adult, sensual and flirtatious mood when requested, elegant boudoir-inspired styling with tasteful coverage, no visible genitals, no explicit sexual acts";
-    const prompt = `${character.imagePrompt}\n${scene}\n${adultStyle}\nconsistent facial identity, realistic smartphone photography, clearly an adult age ${character.age}, no text, no watermark`;
-    const referenceImage = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
+    const prompt = `${character.imagePrompt}\n${scene}\n${adultStyle}\nUse the character description only for stable identity traits such as age, face, hair and build. The current scene request has priority for clothing, pose, expression, camera angle and location. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nconsistent facial identity, realistic smartphone photography, clearly an adult age ${character.age}, no text, no watermark`;
+    const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
+    const referenceImage = referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined;
     if (imageSettings.provider === "modelslab") {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
       const generated = await generateModelsLabImages({
