@@ -59,19 +59,24 @@ export async function POST(request: Request) {
       ? "tasteful everyday portrait"
       : imageSettings.safetyLevel === "strict"
         ? "tasteful everyday fashion, non-sexual mood, full clothing coverage"
-      : "adult, sensual and flirtatious mood when requested, elegant boudoir-inspired styling with tasteful coverage, no visible genitals, no explicit sexual acts";
-    const prompt = `${character.imagePrompt}\n${scene}\n${adultStyle}\nUse the character description only for stable identity traits such as age, face, hair and build. The current scene request has priority for clothing, pose, expression, camera angle and location. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nconsistent facial identity, realistic smartphone photography, clearly an adult age ${character.age}, no text, no watermark`;
+        : "adult content fully allowed when requested: sensual, nude, or explicit sexual acts including visible genitals are permitted for fictional consenting adults over 18; follow the user's scene request closely";
+    const prompt = `${character.imagePrompt}\n${scene}\n${adultStyle}\nUse the character description only for stable identity traits such as age, face, hair and build. The current scene request has priority for clothing, pose, expression, camera angle, nudity level and location. Do not recreate the profile portrait composition unless the user explicitly asks for it.\nconsistent facial identity, realistic smartphone photography or illustration as appropriate, clearly an adult age ${character.age}, no text, no watermark`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
     const referenceImage = referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined;
-    if (imageSettings.provider === "modelslab") {
+    const modelsLabFallback = async () => {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
-      const generated = await generateModelsLabImages({
+      return generateModelsLabImages({
         prompt,
         negativePrompt: imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT,
         style: imageSettings.style,
         samples: isProfile ? 1 : imageSettings.samples,
         referenceImage: modelslabReference,
+        enableSafetyChecker: imageSettings.safetyLevel === "strict",
       });
+    };
+
+    if (imageSettings.provider === "modelslab") {
+      const generated = await modelsLabFallback();
       return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";
@@ -102,9 +107,22 @@ export async function POST(request: Request) {
       });
       const canFallBackToGeneration = Boolean(referenceImage)
         && !(error instanceof XaiApiError && [401, 403, 429, 504].includes(error.status));
-      if (!canFallBackToGeneration) throw error;
-      referenceUsed = false;
-      result = await xaiFetch<ImageResponse>("/images/generations", generationPayload, 90_000);
+      if (canFallBackToGeneration) {
+        referenceUsed = false;
+        try {
+          result = await xaiFetch<ImageResponse>("/images/generations", generationPayload, 90_000);
+        } catch (generationError) {
+          const generated = await modelsLabFallback();
+          return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
+        }
+      } else {
+        try {
+          const generated = await modelsLabFallback();
+          return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
+        } catch {
+          throw error;
+        }
+      }
     }
     const imageUrl = result.data?.[0]?.file_output?.public_url || result.data?.[0]?.url;
     if (!imageUrl) throw new Error("Missing generated image URL");
@@ -115,7 +133,11 @@ export async function POST(request: Request) {
       if ([401, 403].includes(error.status)) return Response.json({ error: "ModelsLabのAPI設定を確認してください。" }, { status: 503 });
       if (error.status === 429) return Response.json({ error: "ModelsLabが混み合っています。少し待ってから試してください。" }, { status: 429 });
       if (error.status === 504) return Response.json({ error: "画像生成に時間がかかっています。もう一度試してください。" }, { status: 504 });
-      return Response.json({ error: "ModelsLabで画像を生成できませんでした。設定またはモデルを確認してください。" }, { status: 502 });
+      const detail = error.message || "";
+      if (/nsfw|safety|explicit|adult content/i.test(detail)) {
+        return Response.json({ error: "画像生成サービス側で内容が制限されました。表現を変えるか、別のサービス（xAI）を試してください。" }, { status: 400 });
+      }
+      return Response.json({ error: detail || "ModelsLabで画像を生成できませんでした。設定またはモデルを確認してください。" }, { status: 502 });
     }
     const response = publicApiError(error, "画像の生成に失敗しました。もう一度試してください。");
     return Response.json({ error: response.message }, { status: response.status });
