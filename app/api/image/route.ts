@@ -123,7 +123,7 @@ export async function POST(request: Request) {
         provider: "modelslab",
         referenceAttempted: Boolean(referenceImage),
         referenceUsed: generated.referenceUsed,
-        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId } } : {}),
+        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "two-step-v1" } } : {}),
       });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";
