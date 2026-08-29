@@ -67,6 +67,57 @@ export function characterPrompt(character: Character, affection: number, userDis
   return `${BASE_SYSTEM_PROMPT}\n\nユーザーが画像を送った場合は、画像内で実際に確認できる内容に触れ、キャラクターらしい自然な反応や感想を返してください。見えない内容を断定せず、個人の特定やセンシティブ属性の推測はしません。\n${adultTopicInstruction}\n${imageRequestInstruction}\n${userNameInstruction}\n${relationshipInstruction}\n${memoryInstruction}\n${lengthInstruction}\n${questionInstruction}\n${repetitionInstruction}\n${imageClarificationInstruction}\n\n【固定キャラクター設定】\n名前: ${character.name}\n年齢: ${character.age}歳\n職業: ${character.job}\n婚姻状況: ${character.maritalStatus}\n性格: ${character.personality.join("、")}\n趣味: ${character.hobbies.join("、")}\n恋愛傾向: ${character.romanceStyle}\n話し方: ${character.speakingStyle}\n外見: ${character.appearance}\n服装傾向: ${character.fashion}\n現在の好感度: ${affection}/100（会話段階: ${stage}）`;
 }
 
+export function groupPrompt(members: Character[], affection: number, userDisplayName = "", context: PromptContext = {}) {
+  const roster = members.map((member) => `・${member.name}（${member.age}歳・${member.job}・${member.maritalStatus}）\n  性格: ${member.personality.join("、")}\n  話し方: ${member.speakingStyle}\n  趣味: ${member.hobbies.join("、")}\n  外見: ${member.appearance}\n  成人話題: ${member.adultTopicPolicy === "reject" ? "拒否する" : "キャラに沿って応じる"}`).join("\n");
+  const names = members.map((member) => member.name).join("、");
+  const userNameInstruction = userDisplayName
+    ? `ユーザーの呼び名は ${JSON.stringify(userDisplayName)} です。自然に使いますが連呼しません。`
+    : "ユーザーの呼び名は未設定です。";
+  const memoryInstruction = context.memories?.length
+    ? `ユーザーについて覚えていること:\n${context.memories.map((memory) => `- ${JSON.stringify(memory.content)}`).join("\n")}`
+    : "";
+  return `${BASE_SYSTEM_PROMPT}
+
+これはグループチャットです。相手側は次の成人女性たちです。あなたは彼女たち全員を演じます。毎回全員が喋る必要はなく、1〜2人が自然に反応します。
+${roster}
+
+出力形式は厳守:
+${members[0]?.name}: 本文
+必要なら次の人も同様に「名前: 本文」。名前は ${names} と一字一句同じ。一人の発言は1〜3文。英語のタグやプロンプトは書かない。
+
+${userNameInstruction}
+${memoryInstruction}
+${context.avoidQuestion ? "今回は質問で終えません。" : ""}
+現在の好感度目安: ${affection}/100。急に恋人のようにはしません。`;
+}
+
+export function parseGroupReply(reply: string, members: Character[]) {
+  const lines = reply.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const parts: Array<{ content: string; speakerId: string; speakerName: string }> = [];
+  for (const line of lines) {
+    const matched = line.match(/^(.{1,20}?)[:：]\s*(.+)$/);
+    if (!matched) {
+      if (parts.length) parts[parts.length - 1].content += `\n${line}`;
+      continue;
+    }
+    const name = matched[1].replace(/^\*+|\*+$/g, "").trim();
+    const member = members.find((item) => item.name === name) || members.find((item) => name.includes(item.name) || item.name.includes(name));
+    if (!member) {
+      if (parts.length) parts[parts.length - 1].content += `\n${line}`;
+      else parts.push({ speakerId: members[0].id, speakerName: members[0].name, content: line });
+      continue;
+    }
+    parts.push({ speakerId: member.id, speakerName: member.name, content: matched[2].trim() });
+  }
+  if (!parts.length && members[0]) parts.push({ speakerId: members[0].id, speakerName: members[0].name, content: reply });
+  return parts.slice(0, 4);
+}
+
+export function speakerForPhoto(text: string, members: Character[], lastSpeakerId?: string) {
+  const hit = members.find((member) => member.name && text.includes(member.name));
+  return hit || members.find((member) => member.id === lastSpeakerId) || members[0];
+}
+
 const requestWords = /(写真|画像|自撮り|写メ|ヌード|全裸)/;
 const actionWords = /(送って|見せて|見たい|ちょうだい|撮って|見せられる)/;
 const questionOnly = /(好き|趣味|撮るの|よく撮)/;

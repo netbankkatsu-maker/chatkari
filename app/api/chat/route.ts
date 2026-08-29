@@ -1,5 +1,5 @@
 import { resolveCharacter } from "@/data/characters";
-import { characterPrompt, imageGenerationIntent, isAdultTopic, isVoiceRequest } from "@/lib/chat";
+import { characterPrompt, groupPrompt, imageGenerationIntent, isAdultTopic, isVoiceRequest, parseGroupReply, speakerForPhoto } from "@/lib/chat";
 import { sanitizeMemories, sanitizeRelationship } from "@/lib/conversation";
 import type { ChatMessageData } from "@/lib/types";
 import { CHAT_MODEL, publicApiError, xaiFetch } from "@/lib/xai";
@@ -25,11 +25,20 @@ export async function POST(request: Request) {
       summary?: string;
       userDisplayName?: string;
       character?: unknown;
+      members?: unknown;
       conversationState?: unknown;
       memories?: unknown;
     };
     const character = resolveCharacter(body.characterId, body.character);
     if (!character) return Response.json({ error: "キャラクターが見つかりません。" }, { status: 400 });
+    const members = (Array.isArray(body.members) ? body.members : []).flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const id = String((item as { id?: string }).id || "");
+      const resolved = resolveCharacter(id, item);
+      return resolved ? [resolved] : [];
+    }).filter((item, index, list) => list.findIndex((entry) => entry.id === item.id) === index).slice(0, 4);
+    const party = members.length >= 2 ? members : [character];
+    const grouped = party.length >= 2;
 
     const latestRawUserMessage = Array.isArray(body.messages)
       ? [...body.messages].reverse().find((message) => message?.role === "user" && typeof message.content === "string")
@@ -43,8 +52,11 @@ export async function POST(request: Request) {
         if ((message.role !== "user" && message.role !== "assistant") || typeof message.content !== "string") return [];
         return [{
           role: message.role,
-          content: message.content.slice(0, MAX_MESSAGE_CHARACTERS),
+          content: message.role === "assistant" && message.speakerName
+            ? `${message.speakerName}: ${message.content.slice(0, MAX_MESSAGE_CHARACTERS)}`
+            : message.content.slice(0, MAX_MESSAGE_CHARACTERS),
           imageUrl: message.role === "user" ? safeUserImage(message.imageUrl) : undefined,
+          speakerId: typeof message.speakerId === "string" ? message.speakerId : undefined,
         }];
       }).slice(-30)
       : [];
@@ -68,14 +80,23 @@ export async function POST(request: Request) {
       : latestUser.length <= 28
         ? (Math.random() < 0.38 ? "short" : Math.random() < 0.86 ? "medium" : "long")
         : "medium";
-    const system = characterPrompt(character, affection, userDisplayName, {
-      relationship,
-      memories,
-      replyLength,
-      avoidQuestion,
-      recentOpenings: recentAssistant.map((message) => message.content.trim().slice(0, 18)).filter(Boolean),
-      imageClarificationNeeded: imageIntent.needsClarification,
-    }) + (body.summary ? `\n古い会話の要約: ${String(body.summary).slice(0, 2000)}` : "");
+    const system = (grouped
+      ? groupPrompt(party, affection, userDisplayName, {
+        relationship,
+        memories,
+        replyLength,
+        avoidQuestion,
+        recentOpenings: recentAssistant.map((message) => message.content.trim().slice(0, 18)).filter(Boolean),
+        imageClarificationNeeded: imageIntent.needsClarification,
+      })
+      : characterPrompt(character, affection, userDisplayName, {
+        relationship,
+        memories,
+        replyLength,
+        avoidQuestion,
+        recentOpenings: recentAssistant.map((message) => message.content.trim().slice(0, 18)).filter(Boolean),
+        imageClarificationNeeded: imageIntent.needsClarification,
+      })) + (body.summary ? `\n古い会話の要約: ${String(body.summary).slice(0, 2000)}` : "");
     const completionMessages = [
       { role: "system", content: system },
       ...messages.map((message) => message === latestUserMessage && message.imageUrl
@@ -115,12 +136,15 @@ export async function POST(request: Request) {
       if (continuation) reply += continuation;
     }
 
-    const blocksRejectedImage = character.adultTopicPolicy === "reject" && isAdultTopic(latestUser);
+    const photoSpeaker = speakerForPhoto(latestUser, party, [...(body.messages || [])].reverse().find((message) => message?.role === "assistant" && typeof message.speakerId === "string")?.speakerId);
+    const blocksRejectedImage = (photoSpeaker || character).adultTopicPolicy === "reject" && isAdultTopic(latestUser);
+    const replyParts = grouped ? parseGroupReply(reply, party) : splitNaturalReply(reply).map((content) => ({ content, speakerId: character.id, speakerName: character.name }));
     return Response.json({
       reply,
-      replyParts: splitNaturalReply(reply),
+      replyParts,
       imageRequested: !blocksRejectedImage && imageIntent.shouldGenerate,
       voiceRequested: isVoiceRequest(latestUser),
+      photoSpeakerId: photoSpeaker?.id || character.id,
     });
   } catch (error) {
     const response = publicApiError(error, "返信に失敗しました。もう一度試してください。");

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Character } from "@/data/characters";
+import { ProfileImage } from "@/components/ProfileImage";
 import { loadAudio } from "@/lib/audio-store";
 import type { ChatMessageData } from "@/lib/types";
 
@@ -33,9 +35,15 @@ function ChatImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export function ChatMessage({ message }: { message: ChatMessageData }) {
+export function ChatMessage({ message, speaker, speakerImage, grouped }: {
+  message: ChatMessageData;
+  speaker?: Character;
+  speakerImage?: string;
+  grouped?: boolean;
+}) {
   const [audioUrl, setAudioUrl] = useState<string>();
   const [audioUnavailable, setAudioUnavailable] = useState(false);
+  const showSpeaker = Boolean(grouped && message.role === "assistant");
 
   useEffect(() => {
     if (!message.audioId) return;
@@ -54,19 +62,23 @@ export function ChatMessage({ message }: { message: ChatMessageData }) {
   }, [message.audioId]);
 
   return (
-    <div className={`message-row message-row--${message.role}`}>
-      <div className="message-bubble">
-        {message.audioId && (
-          <div className="message-audio">
-            <span className="message-audio-icon" aria-hidden="true">▶</span>
-            {audioUrl ? <audio controls src={audioUrl} preload="metadata" aria-label={`${message.role === "user" ? "送信した" : "受信した"}ボイスメッセージ`} /> : <span className="message-audio-loading">{audioUnavailable ? "音声データを読み込めません" : "音声を読み込み中…"}</span>}
-            {message.audioDuration && <small>{message.audioDuration}秒</small>}
-          </div>
-        )}
-        {message.content && (message.audioId
-          ? <details className="voice-transcript"><summary>{message.role === "user" ? "文字起こし" : "メッセージを見る"}</summary><p>{message.content}</p></details>
-          : <p>{message.content}</p>)}
-        {message.imageUrl && <ChatImage src={message.imageUrl} alt={message.role === "user" ? "ユーザーが送った画像" : "AIキャラクターが送った生成画像"} />}
+    <div className={`message-row message-row--${message.role}${showSpeaker ? " is-grouped" : ""}`}>
+      {showSpeaker && speaker && <ProfileImage character={speaker} imageUrl={speakerImage} size="small" />}
+      <div className="message-stack">
+        {showSpeaker && <small className="message-speaker">{message.speakerName || speaker?.name}</small>}
+        <div className="message-bubble">
+          {message.audioId && (
+            <div className="message-audio">
+              <span className="message-audio-icon" aria-hidden="true">▶</span>
+              {audioUrl ? <audio controls src={audioUrl} preload="metadata" aria-label={`${message.role === "user" ? "送信した" : "受信した"}ボイスメッセージ`} /> : <span className="message-audio-loading">{audioUnavailable ? "音声データを読み込めません" : "音声を読み込み中…"}</span>}
+              {message.audioDuration && <small>{message.audioDuration}秒</small>}
+            </div>
+          )}
+          {message.content && (message.audioId
+            ? <details className="voice-transcript"><summary>{message.role === "user" ? "文字起こし" : "メッセージを見る"}</summary><p>{message.content}</p></details>
+            : <p>{message.content}</p>)}
+          {message.imageUrl && <ChatImage src={message.imageUrl} alt={message.role === "user" ? "ユーザーが送った画像" : `${message.speakerName || speaker?.name || "AIキャラクター"}が送った生成画像`} />}
+        </div>
       </div>
     </div>
   );

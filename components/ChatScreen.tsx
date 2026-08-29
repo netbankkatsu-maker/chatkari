@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Character } from "@/data/characters";
-import type { ChatMessageData } from "@/lib/types";
+import type { ChatMessageData, ChatReplyPart } from "@/lib/types";
 import { ChatInput } from "@/components/ChatInput";
 import { ChatMessage } from "@/components/ChatMessage";
+import { GroupAvatars } from "@/components/GroupProfile";
 import { ProfileImage } from "@/components/ProfileImage";
 import { profileImageFor } from "@/data/profile-images";
 import { saveAudio } from "@/lib/audio-store";
@@ -19,6 +21,7 @@ import {
   type ConversationMemory,
   type RelationshipState,
 } from "@/lib/conversation";
+import { allKnownCharacters, groupIdFromMembers, groupTitle, MAX_GROUP_SIZE, rememberGroup } from "@/lib/group";
 import { loadImageSettings } from "@/lib/image-settings";
 import { chooseImageReference } from "@/lib/image-reference";
 
@@ -50,21 +53,63 @@ function activityText(status: "idle" | "transcribing" | "replying" | "voice" | "
   return `${name}が入力中…`;
 }
 
-export function ChatScreen({ character }: { character: Character }) {
-  const initial: ChatMessageData[] = [{ id: `first-${character.id}`, role: "assistant", content: character.firstMessage }];
+function storedImagesFor(members: Character[]) {
+  return Object.fromEntries(members.map((member) => [member.id, localStorage.getItem(`chatkari:image:${member.id}`) || profileImageFor(member.id) || undefined]));
+}
+
+function firstMessages(members: Character[]): ChatMessageData[] {
+  return members.map((member) => ({
+    id: `first-${member.id}`,
+    role: "assistant" as const,
+    content: member.firstMessage,
+    speakerId: member.id,
+    speakerName: member.name,
+  }));
+}
+
+function normalizeReplyParts(raw: unknown, reply: string, fallback: Character): ChatReplyPart[] {
+  const source = Array.isArray(raw) && raw.length ? raw : [reply];
+  return source.flatMap((part) => {
+    if (typeof part === "string") {
+      const content = part.trim();
+      return content ? [{ content, speakerId: fallback.id, speakerName: fallback.name }] : [];
+    }
+    if (!part || typeof part !== "object") return [];
+    const item = part as ChatReplyPart;
+    const content = typeof item.content === "string" ? item.content.trim() : "";
+    if (!content) return [];
+    return [{
+      content,
+      speakerId: typeof item.speakerId === "string" ? item.speakerId : fallback.id,
+      speakerName: typeof item.speakerName === "string" ? item.speakerName : fallback.name,
+    }];
+  }).slice(0, 4);
+}
+
+export function ChatScreen({ character, members }: { character: Character; members?: Character[] }) {
+  const router = useRouter();
+  const party = useMemo(() => (members && members.length >= 2 ? members : [character]), [character, members]);
+  const grouped = party.length >= 2;
+  const roomId = groupIdFromMembers(party.map((member) => member.id)) || character.id;
+  const initial = firstMessages(party);
   const [messages, setMessages] = useState<ChatMessageData[]>(initial);
   const [relationship, setRelationship] = useState<RelationshipState>(DEFAULT_RELATIONSHIP);
   const [memories, setMemories] = useState<ConversationMemory[]>([]);
   const [status, setStatus] = useState<"idle" | "transcribing" | "replying" | "voice" | "image">("idle");
   const [error, setError] = useState("");
   const [profileUrl, setProfileUrl] = useState<string>();
+  const [memberImages, setMemberImages] = useState<Record<string, string | undefined>>({});
   const [userDisplayName, setUserDisplayName] = useState("");
   const [nameDraft, setNameDraft] = useState("");
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [pendingAdds, setPendingAdds] = useState<string[]>([]);
+  const [addable, setAddable] = useState<Character[]>([]);
   const [ready, setReady] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
-  const storageKey = `chatkari:chat:${character.id}`;
-  const userNameKey = `chatkari:user-name:${character.id}`;
+  const storageKey = `chatkari:chat:${roomId}`;
+  const userNameKey = `chatkari:user-name:${roomId}`;
+  const title = grouped ? groupTitle(party) : character.name;
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -75,16 +120,21 @@ export function ChatScreen({ character }: { character: Character }) {
           if (Array.isArray(parsed.messages) && parsed.messages.length) setMessages(parsed.messages);
           setRelationship(sanitizeRelationship(parsed.relationship, parsed.affection ?? 20));
           setMemories(sanitizeMemories(parsed.memories));
+        } else {
+          setMessages(firstMessages(party));
         }
         const storedName = localStorage.getItem(userNameKey) || "";
         setUserDisplayName(storedName);
         setNameDraft(storedName);
+        setMemberImages(storedImagesFor(party));
         setProfileUrl(localStorage.getItem(`chatkari:image:${character.id}`) || profileImageFor(character.id) || undefined);
+        setAddable(allKnownCharacters().filter((item) => !party.some((member) => member.id === item.id)));
+        if (grouped) rememberGroup(roomId, party);
       } catch { /* Ignore corrupt local state. */ }
       setReady(true);
     });
     return () => cancelAnimationFrame(frame);
-  }, [character.id, storageKey, userNameKey]);
+  }, [character.id, grouped, party, roomId, storageKey, userNameKey]);
 
   function saveUserDisplayName(event: FormEvent) {
     event.preventDefault();
@@ -119,6 +169,47 @@ export function ChatScreen({ character }: { character: Character }) {
     }
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, relationship, memories, ready, storageKey, status]);
+
+  function togglePending(id: string) {
+    setPendingAdds((current) => {
+      if (current.includes(id)) return current.filter((item) => item !== id);
+      if (party.length + current.length >= MAX_GROUP_SIZE) return current;
+      return [...current, id];
+    });
+  }
+
+  function confirmAddMembers() {
+    const extras = pendingAdds.flatMap((id) => addable.find((item) => item.id === id) || []);
+    if (!extras.length) return;
+    const nextParty = [...party, ...extras].slice(0, MAX_GROUP_SIZE);
+    const nextId = groupIdFromMembers(nextParty.map((member) => member.id));
+    const joinMessages = extras.map((member) => ({
+      id: makeId(),
+      role: "assistant" as const,
+      content: member.firstMessage,
+      speakerId: member.id,
+      speakerName: member.name,
+    }));
+    const nextMessages = [...messages, ...joinMessages];
+    try {
+      localStorage.setItem(`chatkari:chat:${nextId}`, JSON.stringify({
+        messages: nextMessages,
+        affection: relationship.affection,
+        relationship,
+        memories,
+        updatedAt: Date.now(),
+      }));
+      if (userDisplayName) localStorage.setItem(`chatkari:user-name:${nextId}`, userDisplayName);
+    } catch { /* Storage may be full; navigation still works with first messages. */ }
+    rememberGroup(nextId, nextParty);
+    setAddOpen(false);
+    setPendingAdds([]);
+    router.push(`/chat/${nextId}`);
+  }
+
+  function speakerOf(message: ChatMessageData) {
+    return party.find((member) => member.id === message.speakerId) || party[0];
+  }
 
   async function send(text: string, imageUrl?: string, voice?: RecordedVoiceMessage) {
     if (status !== "idle") return;
@@ -167,6 +258,7 @@ export function ChatScreen({ character }: { character: Character }) {
         body: JSON.stringify({
           characterId: character.id,
           character,
+          members: grouped ? party : undefined,
           userDisplayName,
           messages: nextMessages.slice(-30).map((message) => {
             if (message.role === "assistant" && message.imageUrl) {
@@ -180,12 +272,16 @@ export function ChatScreen({ character }: { character: Character }) {
           memories: updatedMemories,
         }),
       });
-      const data = await response.json() as { reply?: string; replyParts?: string[]; imageRequested?: boolean; voiceRequested?: boolean; error?: string };
+      const data = await response.json() as { reply?: string; replyParts?: ChatReplyPart[]; imageRequested?: boolean; voiceRequested?: boolean; photoSpeakerId?: string; error?: string };
       if (!response.ok || !data.reply) throw new Error(data.error || "返信に失敗しました。もう一度試してください。");
-      const replyParts = Array.isArray(data.replyParts) && data.replyParts.length
-        ? data.replyParts.filter((part) => typeof part === "string" && part.trim()).slice(0, 3)
-        : [data.reply];
-      const replies = replyParts.map((content) => ({ id: makeId(), role: "assistant" as const, content }));
+      const replyParts = normalizeReplyParts(data.replyParts, data.reply, character);
+      const replies: ChatMessageData[] = replyParts.map((part) => ({
+        id: makeId(),
+        role: "assistant",
+        content: part.content,
+        speakerId: part.speakerId,
+        speakerName: part.speakerName,
+      }));
       for (const [index, reply] of replies.entries()) {
         if (index > 0) {
           setStatus("replying");
@@ -194,13 +290,14 @@ export function ChatScreen({ character }: { character: Character }) {
         setMessages((current) => [...current, reply]);
       }
 
+      const voiceSpeaker = party.find((member) => member.id === replies.at(-1)?.speakerId) || character;
       if (voice || data.voiceRequested) {
         setStatus("voice");
         try {
           const voiceResponse = await fetch("/api/voice/synthesize", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ characterId: character.id, character, text: data.reply }),
+            body: JSON.stringify({ characterId: voiceSpeaker.id, character: voiceSpeaker, text: replies.at(-1)?.content || data.reply }),
           });
           if (!voiceResponse.ok) {
             const voiceError = await voiceResponse.json().catch(() => ({})) as { error?: string };
@@ -218,21 +315,23 @@ export function ChatScreen({ character }: { character: Character }) {
       }
       if (data.imageRequested) {
         setStatus("image");
+        const photoSpeaker = party.find((member) => member.id === data.photoSpeakerId) || voiceSpeaker;
         const imageGuidance = localStorage.getItem("chatkari:image-guidance") || "";
         const imageSettings = loadImageSettings();
         const conversationWindow = nextMessages.slice(-10);
         const recentContext = [...conversationWindow.map((message) => `${message.role}: ${message.content}${message.imageUrl ? " [この発言には画像がある]" : ""}`), `assistant: ${data.reply}`].join("\n");
         const conversationReference = [...conversationWindow].reverse().find((message) => message.id !== userMessage.id && message.imageUrl)?.imageUrl;
+        const speakerProfile = memberImages[photoSpeaker.id] || profileUrl;
         const { referenceImage, referenceSource } = chooseImageReference({
           requestText: text,
           attachedImage: imageUrl,
           conversationImage: conversationReference,
-          profileImage: profileUrl,
+          profileImage: speakerProfile,
         });
         const imageResponse = await fetch("/api/image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ characterId: character.id, character, mode: "chat", requestText: text, recentContext, photoDescription: data.reply, referenceImage, referenceSource, customImagePrompt: imageGuidance, imageSettings }),
+          body: JSON.stringify({ characterId: photoSpeaker.id, character: photoSpeaker, mode: "chat", requestText: text, recentContext, photoDescription: data.reply, referenceImage, referenceSource, customImagePrompt: imageGuidance, imageSettings }),
         });
         const imageData = await imageResponse.json() as { imageUrl?: string; imageUrls?: string[]; error?: string };
         if (!imageResponse.ok || !imageData.imageUrl) throw new Error(imageData.error || "画像の生成に失敗しました。もう一度試してください。");
@@ -241,7 +340,14 @@ export function ChatScreen({ character }: { character: Character }) {
         for (const generatedImage of generatedImages) {
           storedImages.push(await toStoredImage(generatedImage));
         }
-        setMessages((current) => [...current, ...storedImages.map((generatedImage) => ({ id: makeId(), role: "assistant" as const, content: "", imageUrl: generatedImage }))]);
+        setMessages((current) => [...current, ...storedImages.map((generatedImage) => ({
+          id: makeId(),
+          role: "assistant" as const,
+          content: "",
+          imageUrl: generatedImage,
+          speakerId: photoSpeaker.id,
+          speakerName: photoSpeaker.name,
+        }))]);
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "返信に失敗しました。もう一度試してください。");
@@ -250,17 +356,33 @@ export function ChatScreen({ character }: { character: Character }) {
     }
   }
 
+  const canAdd = party.length < MAX_GROUP_SIZE && addable.length > 0;
+
   return (
     <main className="chat-page">
       <header className="chat-header">
         <Link href="/chats" aria-label="チャット一覧へ戻る">‹</Link>
-        <ProfileImage character={character} imageUrl={profileUrl} size="small" />
-        <div className="chat-header-identity"><strong>{character.name}</strong><span><i /> オンライン</span></div>
+        {grouped
+          ? <GroupAvatars members={party} images={memberImages} size="tiny" />
+          : <ProfileImage character={character} imageUrl={profileUrl} size="small" />}
+        <div className="chat-header-identity"><strong>{title}</strong><span><i /> {grouped ? `${party.length}人オンライン` : "オンライン"}</span></div>
+        {canAdd && <button className="chat-add-button" type="button" onClick={() => { setPendingAdds([]); setAddOpen(true); }}>追加</button>}
         <button className="chat-name-button" type="button" onClick={() => { setNameDraft(userDisplayName); setNameDialogOpen(true); }}><span>あなたの呼び名</span><strong>{userDisplayName || "未設定"}</strong></button>
       </header>
       <div className="chat-messages">
-        {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
-        {status !== "idle" && <div className="typing"><span /><span /><span /> {activityText(status, character.name)}</div>}
+        {messages.map((message) => {
+          const speaker = message.role === "assistant" ? speakerOf(message) : undefined;
+          return (
+            <ChatMessage
+              key={message.id}
+              message={message}
+              speaker={speaker}
+              speakerImage={speaker ? memberImages[speaker.id] : undefined}
+              grouped={grouped}
+            />
+          );
+        })}
+        {status !== "idle" && <div className="typing"><span /><span /><span /> {activityText(status, grouped ? "みんな" : character.name)}</div>}
         {error && <div className="chat-error" role="alert">{error}</div>}
         <div ref={endRef} />
       </div>
@@ -270,12 +392,37 @@ export function ChatScreen({ character }: { character: Character }) {
           <form className="name-dialog" role="dialog" aria-modal="true" aria-labelledby="name-dialog-title" onSubmit={saveUserDisplayName} onClick={(event) => event.stopPropagation()}>
             <button className="name-dialog-close" type="button" aria-label="閉じる" onClick={() => setNameDialogOpen(false)}>×</button>
             <p className="eyebrow">CALL ME</p>
-            <h2 id="name-dialog-title">{character.name}からの呼ばれ方</h2>
-            <p>このキャラだけが使う、あなたの名前やあだ名を設定できます。</p>
+            <h2 id="name-dialog-title">{grouped ? "グループからの呼ばれ方" : `${character.name}からの呼ばれ方`}</h2>
+            <p>この会話だけが使う、あなたの名前やあだ名を設定できます。</p>
             <label htmlFor="user-display-name">呼び名</label>
             <input id="user-display-name" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} maxLength={24} autoFocus placeholder="例：かっちゃん、〇〇さん" />
             <button className="name-dialog-save" type="submit">保存する</button>
           </form>
+        </div>
+      )}
+      {addOpen && (
+        <div className="name-dialog-overlay" role="presentation" onClick={() => setAddOpen(false)}>
+          <section className="name-dialog add-member-dialog" role="dialog" aria-modal="true" aria-labelledby="add-member-title" onClick={(event) => event.stopPropagation()}>
+            <button className="name-dialog-close" type="button" aria-label="閉じる" onClick={() => setAddOpen(false)}>×</button>
+            <p className="eyebrow">ADD MEMBERS</p>
+            <h2 id="add-member-title">人を追加する</h2>
+            <p>最大{MAX_GROUP_SIZE}人まで。今は{party.length}人です。</p>
+            <div className="add-member-grid">
+              {addable.map((item) => {
+                const selected = pendingAdds.includes(item.id);
+                const disabled = !selected && party.length + pendingAdds.length >= MAX_GROUP_SIZE;
+                return (
+                  <button key={item.id} type="button" className={selected ? "is-selected" : undefined} disabled={disabled} onClick={() => togglePending(item.id)}>
+                    <ProfileImage character={item} imageUrl={memberImages[item.id] || profileImageFor(item.id) || undefined} size="small" />
+                    <span>{item.name}<small>{item.age}歳</small></span>
+                  </button>
+                );
+              })}
+            </div>
+            <button className="name-dialog-save" type="button" disabled={!pendingAdds.length} onClick={confirmAddMembers}>
+              {pendingAdds.length ? `${pendingAdds.length}人を追加して話す` : "追加する人を選ぶ"}
+            </button>
+          </section>
         </div>
       )}
     </main>

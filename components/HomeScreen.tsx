@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { characters, sanitizeCharacter, type Character } from "@/data/characters";
 import { AppTabBar } from "@/components/AppTabBar";
 import { CharacterProfile } from "@/components/CharacterProfile";
+import { GroupProfile } from "@/components/GroupProfile";
 import { MatchPreferences } from "@/components/MatchPreferences";
 import { ProfileImage } from "@/components/ProfileImage";
 import { PROFILE_IMAGE_VERSION, profileImageFor } from "@/data/profile-images";
 import { loadImageSettings } from "@/lib/image-settings";
+import { MAX_GROUP_SIZE } from "@/lib/group";
 
 type Preparation = { done: number; total: number };
 const DEFAULT_MATCH_IDS = ["yukie", "misaki", "mayu", "ayaka", "rena", "chinatsu", "saori", "yui", "mai", "rika"];
@@ -59,7 +61,10 @@ async function prepareProfiles(candidates: Character[], onProgress: (progress: P
 export function HomeScreen() {
   const [pool, setPool] = useState<Character[]>(characters);
   const [match, setMatch] = useState<Character>();
+  const [group, setGroup] = useState<Character[]>();
   const [imageUrl, setImageUrl] = useState<string>();
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [showAllDefaults, setShowAllDefaults] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -77,9 +82,32 @@ export function HomeScreen() {
   }, []);
 
   function selectMatch(selected: Character) {
+    if (multiSelect) {
+      setSelectedIds((current) => {
+        if (current.includes(selected.id)) return current.filter((id) => id !== selected.id);
+        if (current.length >= MAX_GROUP_SIZE) return current;
+        return [...current, selected.id];
+      });
+      return;
+    }
     const cached = localStorage.getItem(`chatkari:image:${selected.id}`) || profileImageFor(selected.id) || undefined;
     setImageUrl(cached);
     setMatch(selected);
+  }
+
+  function openSelectedGroup() {
+    const selected = selectedIds.flatMap((id) => pool.find((character) => character.id === id) || []);
+    if (selected.length === 1) {
+      const cached = localStorage.getItem(`chatkari:image:${selected[0].id}`) || profileImageFor(selected[0].id) || undefined;
+      setImageUrl(cached);
+      setMatch(selected[0]);
+      setMultiSelect(false);
+      setSelectedIds([]);
+      return;
+    }
+    if (selected.length < 2) return;
+    setImageUrl(localStorage.getItem(`chatkari:image:${selected[0].id}`) || profileImageFor(selected[0].id) || undefined);
+    setGroup(selected);
   }
 
   function useGeneratedCharacters(generated: Character[]) {
@@ -105,6 +133,11 @@ export function HomeScreen() {
   const remainingDefaults = pool.filter((character) => !DEFAULT_MATCH_IDS.includes(character.id));
   const visiblePool = generatedPool ? pool.slice(0, 10) : showAllDefaults ? [...orderedDefaults, ...remainingDefaults] : orderedDefaults;
 
+  if (group?.length) {
+    const memberImages = Object.fromEntries(group.map((member) => [member.id, localStorage.getItem(`chatkari:image:${member.id}`) || profileImageFor(member.id) || undefined]));
+    return <GroupProfile members={group} imageUrl={imageUrl} memberImages={memberImages} onBack={() => setGroup(undefined)} />;
+  }
+
   if (match) {
     return (
       <main className="page-shell match-page">
@@ -116,24 +149,39 @@ export function HomeScreen() {
   }
 
   return (
-    <main className="home-page home-page--directory">
+    <main className={`home-page home-page--directory${multiSelect && selectedIds.length > 0 ? " home-page--picking" : ""}`}>
       <div className="home-glow home-glow--one" /><div className="home-glow home-glow--two" />
       <section className="match-directory">
         <header className="directory-header">
-          <div><p className="eyebrow">FIND YOUR MATCH</p><h1>話したい相手を選ぶ</h1><p>{visiblePool.length}人のプロフィールから選べます。</p></div>
-          <button type="button" onClick={() => setPreferencesOpen(true)}>絞り込み</button>
+          <div><p className="eyebrow">FIND YOUR MATCH</p><h1>話したい相手を選ぶ</h1><p>{multiSelect ? `最大${MAX_GROUP_SIZE}人まで選べます。` : `${visiblePool.length}人のプロフィールから選べます。`}</p></div>
+          <div className="directory-actions">
+            <button type="button" className={multiSelect ? "is-active" : undefined} onClick={() => { setMultiSelect((current) => !current); setSelectedIds([]); }}>{multiSelect ? "1人に戻す" : "複数人"}</button>
+            <button type="button" onClick={() => setPreferencesOpen(true)}>絞り込み</button>
+          </div>
         </header>
         {!profilesReady && <p className="directory-progress">プロフィール写真を準備中 {preparation.done}/{preparation.total}</p>}
         <div className="match-choice-grid">
           {visiblePool.map((character, index) => {
             const cached = storageReady ? localStorage.getItem(`chatkari:image:${character.id}`) || profileImageFor(character.id) || undefined : profileImageFor(character.id) || undefined;
-            return <button key={character.id} type="button" className="match-choice-card" onClick={() => selectMatch(character)}><ProfileImage character={character} imageUrl={cached} priority={index < 4} /><span className="match-choice-overlay"><strong>{character.name}<small>{character.age}歳</small></strong><em>{character.job}</em><i>{character.personality.slice(0, 2).join("・")}</i></span></button>;
+            return (
+              <button key={character.id} type="button" className={`match-choice-card${selectedIds.includes(character.id) ? " is-selected" : ""}`} onClick={() => selectMatch(character)} aria-pressed={multiSelect ? selectedIds.includes(character.id) : undefined}>
+                <ProfileImage character={character} imageUrl={cached} priority={index < 4} />
+                {multiSelect && <span className="match-choice-check" aria-hidden="true">{selectedIds.includes(character.id) ? "✓" : ""}</span>}
+                <span className="match-choice-overlay"><strong>{character.name}<small>{character.age}歳</small></strong><em>{character.job}</em><i>{character.personality.slice(0, 2).join("・")}</i></span>
+              </button>
+            );
           })}
         </div>
         {!generatedPool && remainingDefaults.length > 0 && <button className="show-more-matches" type="button" onClick={() => setShowAllDefaults((current) => !current)}>{showAllDefaults ? "10人表示に戻す" : `ほか${remainingDefaults.length}人も見る`}</button>}
         {generatedPool && <button className="default-pool-button" type="button" onClick={useDefaultCharacters}>デフォルトの10人に戻す</button>}
         <p className="safety-note"><span>AI</span> 登場する人物はすべて18歳以上の架空キャラクターです</p>
       </section>
+      {multiSelect && selectedIds.length > 0 && (
+        <div className="group-select-bar">
+          <p>{selectedIds.length}人選択中{selectedIds.length >= MAX_GROUP_SIZE ? "（上限）" : ""}</p>
+          <button type="button" onClick={openSelectedGroup} disabled={selectedIds.length < 1}>{selectedIds.length >= 2 ? "この人数で話す" : "プロフィールを見る"}</button>
+        </div>
+      )}
       {preferencesOpen && <MatchPreferences onClose={() => setPreferencesOpen(false)} onGenerated={useGeneratedCharacters} />}
       <AppTabBar />
     </main>

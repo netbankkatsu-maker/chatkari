@@ -7,9 +7,17 @@ export type ChatMessageData = {
   imageUrl?: string;
   audioId?: string;
   audioDuration?: number;
+  speakerId?: string;
+  speakerName?: string;
 };
 
 export type RecordedVoiceMessage = {
   blob: Blob;
   duration: number;
+};
+
+export type ChatReplyPart = {
+  content: string;
+  speakerId?: string;
+  speakerName?: string;
 };
