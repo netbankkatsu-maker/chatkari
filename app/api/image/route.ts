@@ -1,7 +1,7 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
-import { playLoras, playPromptAddons, resolvePlayCategories } from "@/lib/image-play";
+import { playLeadPrompt, playLoras, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -65,36 +65,25 @@ export async function POST(request: Request) {
     const scene = isProfile
       ? "friendly profile portrait for a fictional AI matching app, looking at camera, clean softly lit background, tasteful everyday outfit"
       : [optimizedRequest, playPromptAddons(play)].filter(Boolean).join("\n");
-    const adultStyle = isProfile || imageSettings.safetyLevel === "strict"
-      ? "tasteful everyday portrait, fully clothed, one person only"
-      : play.includes("lingerie") && !play.includes("nude")
-        ? "single photo of one woman wearing bra and panties, underwear on"
-        : clothingMode === "explicit" || play.some((id) => id !== "lingerie")
-        ? "adult photograph of one woman matching the requested act, no collage"
-        : clothingMode === "nude"
-        ? "single photo of one woman, nude only because the user asked, no collage"
-        : clothingMode === "lingerie"
-          ? "single photo of one woman wearing bra and panties, underwear on, not nude, no collage"
-          : "single photo of one clothed woman; wear exactly the clothes named in the photo description";
     const identity = buildIdentityLock({
       imagePrompt: character.imagePrompt,
       appearance: character.appearance,
       age: character.age,
     });
-    const prompt = `${identity}\n${scene}\n${adultStyle}\nsolo, 1girl, only one woman. Two arms, two legs, two breasts only, one head.\nlook ${character.age} years old, realistic smartphone photography`;
+    const prompt = play.length
+      ? playLeadPrompt(play, character.appearance, character.age)
+      : `${identity}\n${scene}\nsolo, 1girl, only one woman\nlook ${character.age} years old, realistic smartphone photography`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
-    const referenceImage = (clothingMode === "explicit" || clothingMode === "nude" || play.length > 0)
+    const referenceImage = play.length
       ? undefined
       : (referenceRequested(requestText, body.referenceSource || "none") ? requestedReference : undefined);
     const modelsLabFallback = async () => {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
       const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
       const anatomyNegative = "2girls, two women, two heads, extra arms, extra breasts, third breast, collage, giant, elongated body";
-      const clothingNegative = play.includes("lingerie") && !play.includes("nude")
+      const clothingNegative = play.includes("lingerie") && !play.includes("nude") && !playUsesPornModel(play)
         ? "fully nude"
-        : clothingMode === "clothed" && play.length === 0
-          ? "nude, naked, fully nude"
-          : "extra breasts, two heads";
+        : "extra breasts, two heads";
       const negativePrompt = `${baseNegative}, ${anatomyNegative}, ${clothingNegative}`;
       const loras = playLoras(play);
       return generateModelsLabImages({
@@ -103,8 +92,8 @@ export async function POST(request: Request) {
         style: imageSettings.style,
         samples: 1,
         referenceImage: modelslabReference,
-        enableSafetyChecker: imageSettings.safetyLevel === "strict",
-        nsfwModel: clothingMode === "explicit" || clothingMode === "nude" || play.some((id) => id !== "lingerie"),
+        enableSafetyChecker: false,
+        nsfwModel: playUsesPornModel(play) || clothingMode === "explicit" || clothingMode === "nude",
         loraModel: loras.loraModel,
         loraStrength: loras.loraStrength,
       });
