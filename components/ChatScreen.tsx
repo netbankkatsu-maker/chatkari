@@ -25,6 +25,24 @@ import { chooseImageReference } from "@/lib/image-reference";
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const delay = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
+async function toStoredImage(url: string) {
+  if (url.startsWith("data:image/")) return url;
+  try {
+    const response = await fetch(`/api/media?url=${encodeURIComponent(url)}`);
+    if (!response.ok) return url;
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/") || blob.size > 900_000) return url;
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return url;
+  }
+}
+
 function activityText(status: "idle" | "transcribing" | "replying" | "voice" | "image", name: string) {
   if (status === "transcribing") return "ボイスを文字起こし中…";
   if (status === "voice") return `${name}がボイスを録音中…`;
@@ -80,11 +98,15 @@ export function ChatScreen({ character }: { character: Character }) {
 
   useEffect(() => {
     if (!ready) return;
-    let remainingStoredImages = 2;
+    let remainingStoredImages = { user: 2, assistant: 4 };
     const persistedMessages = messages.slice(-60).reverse().map((message) => {
-      if (message.role !== "user" || !message.imageUrl?.startsWith("data:image/")) return message;
-      if (remainingStoredImages > 0) {
-        remainingStoredImages -= 1;
+      if (!message.imageUrl?.startsWith("data:image/")) return message;
+      if (message.role === "user" && remainingStoredImages.user > 0) {
+        remainingStoredImages.user -= 1;
+        return message;
+      }
+      if (message.role === "assistant" && remainingStoredImages.assistant > 0) {
+        remainingStoredImages.assistant -= 1;
         return message;
       }
       return { ...message, imageUrl: undefined };
@@ -146,7 +168,13 @@ export function ChatScreen({ character }: { character: Character }) {
           characterId: character.id,
           character,
           userDisplayName,
-          messages: nextMessages.slice(-30).map((message) => message.id === userMessage.id ? message : { ...message, imageUrl: undefined }),
+          messages: nextMessages.slice(-30).map((message) => {
+            if (message.role === "assistant" && message.imageUrl) {
+              return { ...message, content: message.content?.trim() || "（写真を送った）", imageUrl: undefined };
+            }
+            if (message.id === userMessage.id) return message;
+            return { ...message, imageUrl: undefined };
+          }),
           affection: updatedRelationship.affection,
           conversationState: updatedRelationship,
           memories: updatedMemories,
@@ -209,7 +237,11 @@ export function ChatScreen({ character }: { character: Character }) {
         const imageData = await imageResponse.json() as { imageUrl?: string; imageUrls?: string[]; error?: string };
         if (!imageResponse.ok || !imageData.imageUrl) throw new Error(imageData.error || "画像の生成に失敗しました。もう一度試してください。");
         const generatedImages = (imageData.imageUrls?.length ? imageData.imageUrls : [imageData.imageUrl]).slice(0, imageSettings.samples);
-        setMessages((current) => [...current, ...generatedImages.map((generatedImage) => ({ id: makeId(), role: "assistant" as const, content: "", imageUrl: generatedImage }))]);
+        const storedImages: string[] = [];
+        for (const generatedImage of generatedImages) {
+          storedImages.push(await toStoredImage(generatedImage));
+        }
+        setMessages((current) => [...current, ...storedImages.map((generatedImage) => ({ id: makeId(), role: "assistant" as const, content: "", imageUrl: generatedImage }))]);
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "返信に失敗しました。もう一度試してください。");

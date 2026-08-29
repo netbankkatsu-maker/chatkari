@@ -8,8 +8,9 @@ LINEやマッチングアプリDMのように、基本1〜3文で直接反応し
 何にでも同意せず、キャラクターなりの好み、軽い反論、上談、戸惑いを出して構いません。ごくたまに「あ、違う」「ていうか」のような自然な言い直しもできますが、誤字や言い直しを毎回演出しません。相談には定型的な共感文を重ねず、まず相手の具体的な言葉へ反応します。
 最初はマッチしたばかりで多少警戒し、好感度に応じて「警戒→普通→仲良し→かなり親密」と自然に距離を縮めます。急に恋人のようには振る舞いません。
 ただし、ユーザーが成人同士の性的・エロティックな話題を始めた場合は、会話開始直後や好感度が低い段階でも、それだけを理由に拒絶せず、キャラクター性に沿って自然に応じて構いません。その時点のxAI APIの安全ルールで許可される範囲を守ってください。ユーザーが始めていない場合は無理に性的な方向へ誘導しません。未成年、年齢不明の人物、同意のない行為を含む性的内容には応じません。
-写真を求められた場合は、今の状況や服装に触れた短い自然な返事だけをし、画像そのものは別システムが生成するためURLや生成説明は返しません。
-ボイスメッセージや声を求められた場合も、キャラクターらしい短い自然な返事だけをし、音声そのものは別システムが生成するためURLや音声生成の説明は返しません。`;
+写真を求められた場合は、今の状況や服装に触れた短い自然な返事だけをし、画像そのものは別システムが生成するためURLや生成説明は返しません。あなたがこの会話ですでに写真を送っている場合、「送っていない」「まだ見てない」などとは言わず、送った前提で話します。ユーザーが今回写真を求めていないのに、送った体で話したり、勝手に写真を出す前提の返事はしません。
+ボイスメッセージや声を求められた場合も、キャラクターらしい短い自然な返事だけをし、音声そのものは別システムが生成するためURLや音声生成の説明は返しません。
+返信は必ず日本語。英語の単語を並べた画像プロンプト、タグ、翻訳文を本文に書きません。`;
 
 type PromptContext = {
   relationship?: RelationshipState;
@@ -66,32 +67,29 @@ export function characterPrompt(character: Character, affection: number, userDis
   return `${BASE_SYSTEM_PROMPT}\n\nユーザーが画像を送った場合は、画像内で実際に確認できる内容に触れ、キャラクターらしい自然な反応や感想を返してください。見えない内容を断定せず、個人の特定やセンシティブ属性の推測はしません。\n${adultTopicInstruction}\n${imageRequestInstruction}\n${userNameInstruction}\n${relationshipInstruction}\n${memoryInstruction}\n${lengthInstruction}\n${questionInstruction}\n${repetitionInstruction}\n${imageClarificationInstruction}\n\n【固定キャラクター設定】\n名前: ${character.name}\n年齢: ${character.age}歳\n職業: ${character.job}\n婚姻状況: ${character.maritalStatus}\n性格: ${character.personality.join("、")}\n趣味: ${character.hobbies.join("、")}\n恋愛傾向: ${character.romanceStyle}\n話し方: ${character.speakingStyle}\n外見: ${character.appearance}\n服装傾向: ${character.fashion}\n現在の好感度: ${affection}/100（会話段階: ${stage}）`;
 }
 
-const requestWords = /(写真|画像|自撮り|写メ|顔|服|部屋着|全裸|裸|ヌード|下着|性器|陰部|精液|ぶっかけ|射精|セックス|フェラ|性行為|オナニー)/;
-const actionWords = /(送って|送れる|見せて|見たい|ちょうだい|ほしい|欲しい|撮って|どんな|見せられる)/;
+const requestWords = /(写真|画像|自撮り|写メ|ヌード|全裸)/;
+const actionWords = /(送って|見せて|見たい|ちょうだい|撮って|見せられる)/;
 const questionOnly = /(好き|趣味|撮るの|よく撮)/;
 
 export function isImageRequest(text: string) {
   const normalized = text.replace(/\s/g, "");
-  return requestWords.test(normalized) && actionWords.test(normalized) && !questionOnly.test(normalized);
+  if (questionOnly.test(normalized) && !actionWords.test(normalized)) return false;
+  if (requestWords.test(normalized) && actionWords.test(normalized)) return true;
+  return /(下着姿|下着|フェラ|セックス|バイブ|精液|局部|くぱぁ|アナル|オナニー).{0,16}(写真|画像)?(送って|見せて)/.test(normalized);
 }
 
-const directImageAction = /(画像|写真|自撮り|イラスト|絵|全裸|裸|ヌード|下着|性器|精液|ぶっかけ|セックス|フェラ).{0,18}(生成|作って|描いて|送って|見せて|見たい|にして)|(?:生成|描いて).{0,12}(画像|写真|イラスト|絵)/;
-const visualDetails = /(黒髪|茶髪|金髪|大人の|女性|男性|ベッド|部屋|海|街|夜|昼|服|ドレス|下着|全裸|裸|ヌード|性器|ポーズ|座って|立って|寝転|リアル|アニメ|照明|背景|水着|デート)/;
+const directImageAction = /(画像|写真|自撮り|写メ|イラスト|絵|全裸|裸|ヌード|下着).{0,12}(送って|見せて|見たい|ちょうだい)|(?:送って|見せて).{0,12}(画像|写真|自撮り|写メ)/;
 const followupEdit = /(もう少し|もっと|大胆に|控えめに|服装.{0,8}(変えて|替えて)|色.{0,8}(変えて|替えて)|同じ感じ|別パターン|違うポーズ)/;
-const contextualRender = /(?:それ|これ|さっき|直前|今の|この流れ|会話).{0,18}(?:画像|写真|イラスト|絵)?(?:にして|生成して|描いて|見せて)|^(?:画像|写真|イラスト|絵)?(?:を)?生成して[。！!]?$/;
+const contextualRender = /(?:それ|これ|さっき|直前|今の).{0,12}(?:画像|写真)(?:にして|生成して|描いて|見せて)|^(?:画像|写真)(?:を)?(?:生成して|送って|見せて)[。！!]?$/;
 
 export function imageGenerationIntent(latest: string, previousUserMessages: string[]) {
   const normalized = latest.replace(/\s/g, "");
   const explicit = isImageRequest(normalized) || directImageAction.test(normalized);
-  const detailed = visualDetails.test(normalized) || normalized.length >= 45;
-  const priorRequested = previousUserMessages.slice(-4).some((message) => isImageRequest(message) || directImageAction.test(message.replace(/\s/g, "")));
-  const contextualDescription = priorRequested && detailed;
-  const editRequest = priorRequested && followupEdit.test(normalized);
-  const contextRequest = contextualRender.test(normalized);
-  const vagueWish = explicit && /(画像|イラスト).{0,10}(見たい|ほしい|欲しい)/.test(normalized) && !detailed;
+  const priorRequested = previousUserMessages.slice(-1).some((message) => isImageRequest(message) || directImageAction.test(message.replace(/\s/g, "")));
+  const editRequest = priorRequested && followupEdit.test(normalized) && /(写真|画像|服|ポーズ|下着|裸)/.test(normalized);
   return {
-    shouldGenerate: contextRequest || contextualDescription || editRequest || (explicit && !vagueWish),
-    needsClarification: vagueWish && !contextualDescription,
+    shouldGenerate: explicit || editRequest || contextualRender.test(normalized),
+    needsClarification: false,
   };
 }
 

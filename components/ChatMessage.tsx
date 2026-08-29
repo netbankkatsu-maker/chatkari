@@ -4,12 +4,31 @@ import { useEffect, useState } from "react";
 import { loadAudio } from "@/lib/audio-store";
 import type { ChatMessageData } from "@/lib/types";
 
+function displaySrc(src: string, attempt = 0) {
+  if (src.startsWith("data:") || src.startsWith("/api/")) return src;
+  if (src.startsWith("/")) return src;
+  const proxied = `/api/media?url=${encodeURIComponent(src)}`;
+  return attempt ? `${proxied}&r=${attempt}` : proxied;
+}
+
 function ChatImage({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   if (failed) return <p className="message-image-error">画像を表示できませんでした</p>;
   return (
     <div className="message-image">
-      <img src={src} alt={alt} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+      {/* Generated URLs come from ModelsLab/xAI CDNs; next/image blocked those as "?". */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={attempt}
+        src={displaySrc(src, attempt)}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        onError={() => {
+          if (attempt === 0) setAttempt(1);
+          else setFailed(true);
+        }}
+      />
     </div>
   );
 }
