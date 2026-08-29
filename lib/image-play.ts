@@ -78,16 +78,13 @@ export function playNegatives(categories: PlayCategory[]) {
 export function playEngine(categories: PlayCategory[]) {
   const main = categories.find((id) => id !== "lingerie") || categories[0];
   if (main === "lingerie") {
-    return { modelId: "realistic-vision-51", nsfwModel: false, loraModel: "more_details", loraStrength: "0.3" };
+    return { modelId: "realistic-vision-51", nsfwModel: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
   }
   if (main === "nude") {
-    return { modelId: "epicrealism", nsfwModel: true, loraModel: "more_details", loraStrength: "0.35" };
+    return { modelId: "epicrealism", nsfwModel: true, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
   }
-  if (main === "toy") {
-    return { modelId: "uber-realistic-porn-merge", nsfwModel: true, loraModel: "more_details", loraStrength: "0.25" };
-  }
-  if (main === "semen" || main === "oral" || main === "sex") {
-    return { modelId: "uber-realistic-porn-merge", nsfwModel: true, loraModel: "more_details", loraStrength: "0.2" };
+  if (main === "toy" || main === "semen" || main === "oral" || main === "sex") {
+    return { modelId: "uber-realistic-porn-merge", nsfwModel: true, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
   }
   return { modelId: undefined as string | undefined, nsfwModel: playUsesPornModel(categories), loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
 }
