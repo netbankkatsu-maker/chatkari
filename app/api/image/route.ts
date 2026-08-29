@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       photoDescription?: string;
       imageSettings?: unknown;
       referenceSource?: "conversation" | "profile" | "none";
+      debug?: boolean;
     };
     const character = resolveCharacter(body.characterId, body.character);
     if (!character) return Response.json({ error: "キャラクターが見つかりません。" }, { status: 400 });
@@ -100,7 +101,14 @@ export async function POST(request: Request) {
 
     if (imageSettings.provider === "modelslab" || clothingMode === "explicit" || clothingMode === "nude" || play.length > 0) {
       const generated = await modelsLabFallback();
-      return Response.json({ imageUrl: generated.urls[0], imageUrls: generated.urls, provider: "modelslab", referenceAttempted: Boolean(referenceImage), referenceUsed: generated.referenceUsed });
+      return Response.json({
+        imageUrl: generated.urls[0],
+        imageUrls: generated.urls,
+        provider: "modelslab",
+        referenceAttempted: Boolean(referenceImage),
+        referenceUsed: generated.referenceUsed,
+        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId } } : {}),
+      });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";
     const generationPayload = {
