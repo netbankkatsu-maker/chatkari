@@ -19,19 +19,19 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
     id: "semen",
     pattern: /(精液|ぶっかけ|顔射|射精|精子|cum|bukkake|facial)/i,
     prompt: "cum on face",
-    lead: "(solo:1.7), (1girl:1.6), (cum on face:1.6), facial, dripping cum on lips and cheeks, close-up portrait, no bottle, looking at viewer",
+    lead: "(cum on face:1.7), (facial:1.55), 1girl, close-up, dripping cum on lips chin and cheeks, looking at viewer, no bottle",
   },
   {
     id: "oral",
     pattern: /(フェラ|口で|oral|fellatio)/i,
     prompt: "fellatio pov",
-    lead: "(solo:1.7), (1girl:1.6), (pov oral:1.6), penis in mouth, looking up, male out of frame, one woman only",
+    lead: "(penis in mouth:1.7), (pov fellatio:1.65), 1girl, close-up, looking up, male out of frame",
   },
   {
     id: "sex",
     pattern: /(セックス|性交|性行為|中出し|sex|intercourse)/i,
     prompt: "cowgirl pov",
-    lead: "(solo:1.7), (1girl:1.6), (pov cowgirl:1.55), penis, vaginal, riding, looking at viewer, male out of frame, one woman only",
+    lead: "(penis:1.65), (vaginal:1.6), (pov cowgirl:1.55), 1girl, riding, looking at viewer, male out of frame",
   },
   {
     id: "nude",
@@ -86,9 +86,9 @@ export function playBasePrompt(category: PlayCategory, imagePrompt = "", age = 4
 
 export function playImg2ImgStrength(category: PlayCategory) {
   if (category === "toy") return 0.52;
-  if (category === "semen") return 0.62;
-  if (category === "oral") return 0.7;
-  if (category === "sex") return 0.66;
+  if (category === "semen") return 0.68;
+  if (category === "oral") return 0.78;
+  if (category === "sex") return 0.74;
   return 0.55;
 }
 
