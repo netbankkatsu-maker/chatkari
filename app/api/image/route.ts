@@ -2,6 +2,7 @@ import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
 import { playBasePrompt, playEngine, playFrame, playImg2ImgStrength, playLeadPrompt, playNeedsPartner, playNegativePrompt, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
+import { cropGenitalCloseup } from "@/lib/crop-closeup";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -103,6 +104,36 @@ export async function POST(request: Request) {
         clipSkip: engine.sdxl ? 1 : undefined,
       };
       const hardAct = category === "toy" || category === "semen" || category === "spread" || category === "anal";
+      if (category === "closeup") {
+        try {
+          const poseBase = await generateModelsLabImages({
+            ...request,
+            prompt: playBasePrompt("spread", character.imagePrompt, character.age),
+            modelId: "uber-realistic-porn-merge",
+            nsfwModel: true,
+            width: 512,
+            height: 768,
+            clipSkip: 2,
+            guidanceScale: 7,
+          });
+          const posed = await generateModelsLabImages({
+            ...request,
+            prompt: playLeadPrompt(["spread"], character.imagePrompt, character.age),
+            modelId: "uber-realistic-porn-merge",
+            nsfwModel: true,
+            width: 512,
+            height: 768,
+            clipSkip: 2,
+            guidanceScale: 7,
+            referenceImage: poseBase.urls[0],
+            strength: 0.7,
+          });
+          const cropped = await cropGenitalCloseup(posed.urls[0]);
+          return { urls: [cropped], referenceUsed: true };
+        } catch {
+          return generateModelsLabImages(request);
+        }
+      }
       if (hardAct && category) {
         try {
           const nudeBase = await generateModelsLabImages({
@@ -129,7 +160,7 @@ export async function POST(request: Request) {
         provider: "modelslab",
         referenceAttempted: Boolean(referenceImage),
         referenceUsed: generated.referenceUsed,
-        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "kupa-v3" } } : {}),
+        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "kupa-v4" } } : {}),
       });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";
