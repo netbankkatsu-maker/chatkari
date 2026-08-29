@@ -19,6 +19,13 @@ type PromptContext = {
   avoidQuestion?: boolean;
   recentOpenings?: string[];
   imageClarificationNeeded?: boolean;
+  quietNames?: string[];
+};
+
+export type GroupReplyPart = {
+  content: string;
+  speakerId: string;
+  speakerName: string;
 };
 
 const moodLabels: Record<RelationshipState["mood"], string> = {
@@ -67,50 +74,125 @@ export function characterPrompt(character: Character, affection: number, userDis
   return `${BASE_SYSTEM_PROMPT}\n\nユーザーが画像を送った場合は、画像内で実際に確認できる内容に触れ、キャラクターらしい自然な反応や感想を返してください。見えない内容を断定せず、個人の特定やセンシティブ属性の推測はしません。\n${adultTopicInstruction}\n${imageRequestInstruction}\n${userNameInstruction}\n${relationshipInstruction}\n${memoryInstruction}\n${lengthInstruction}\n${questionInstruction}\n${repetitionInstruction}\n${imageClarificationInstruction}\n\n【固定キャラクター設定】\n名前: ${character.name}\n年齢: ${character.age}歳\n職業: ${character.job}\n婚姻状況: ${character.maritalStatus}\n性格: ${character.personality.join("、")}\n趣味: ${character.hobbies.join("、")}\n恋愛傾向: ${character.romanceStyle}\n話し方: ${character.speakingStyle}\n外見: ${character.appearance}\n服装傾向: ${character.fashion}\n現在の好感度: ${affection}/100（会話段階: ${stage}）`;
 }
 
+export function rotatedMembers(members: Character[], turnCount = 0) {
+  if (members.length <= 1) return members;
+  const offset = Math.abs(turnCount) % members.length;
+  return [...members.slice(offset), ...members.slice(0, offset)];
+}
+
+export function quietMemberNames(members: Character[], speakerIds: string[]) {
+  if (members.length < 2 || !speakerIds.length) return [];
+  const counts = Object.fromEntries(members.map((member) => [member.id, 0]));
+  for (const id of speakerIds) {
+    if (id in counts) counts[id] += 1;
+  }
+  const values = Object.values(counts);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) return [];
+  return members.filter((member) => counts[member.id] === min).map((member) => member.name);
+}
+
 export function groupPrompt(members: Character[], affection: number, userDisplayName = "", context: PromptContext = {}) {
   const roster = members.map((member) => `・${member.name}（${member.age}歳・${member.job}・${member.maritalStatus}）\n  性格: ${member.personality.join("、")}\n  話し方: ${member.speakingStyle}\n  趣味: ${member.hobbies.join("、")}\n  外見: ${member.appearance}\n  成人話題: ${member.adultTopicPolicy === "reject" ? "拒否する" : "キャラに沿って応じる"}`).join("\n");
-  const names = members.map((member) => member.name).join("、");
+  const names = members.map((member) => member.name);
+  const order = rotatedMembers(members, context.relationship?.turnCount || 0);
+  const template = order.map((member) => `${member.name}: （この人の口調で1〜2文）`).join("\n");
   const userNameInstruction = userDisplayName
     ? `ユーザーの呼び名は ${JSON.stringify(userDisplayName)} です。自然に使いますが連呼しません。`
     : "ユーザーの呼び名は未設定です。";
   const memoryInstruction = context.memories?.length
     ? `ユーザーについて覚えていること:\n${context.memories.map((memory) => `- ${JSON.stringify(memory.content)}`).join("\n")}`
     : "";
+  const quietInstruction = context.quietNames?.length
+    ? `直近で発言が少なかった人: ${context.quietNames.join("、")}。今回は特にこの人たちを黙らせない。`
+    : "";
   return `${BASE_SYSTEM_PROMPT}
 
-これはグループチャットです。相手側は次の成人女性たちです。あなたは彼女たち全員を演じます。毎回全員が喋る必要はなく、1〜2人が自然に反応します。
+これはグループチャットです。相手側は次の成人女性 ${members.length} 人です。あなたは彼女たち全員を演じます。
 ${roster}
 
-出力形式は厳守:
-${members[0]?.name}: 本文
-必要なら次の人も同様に「名前: 本文」。名前は ${names} と一字一句同じ。一人の発言は1〜3文。英語のタグやプロンプトは書かない。
+【最優先・人数ルール】
+- 毎回、${names.join("、")}の全員が必ず1回ずつ発言する。
+- 会話が長くなっても人数を減らさない。特定の人だけが話し続けるのも禁止。
+- ユーザーが一人に話しかけても、その人が答えたあと残りの人も必ず一言返す。
+- 無言・欠席・「見てるだけ」は禁止。相づちだけなら短くてよい。
+- 上の「1〜3文」ルールより、この人数ルールを優先する。
 
+出力形式は厳守。説明文や番号、括弧書きの指示は書かず、次の ${members.length} 行だけをこの順で出す。各行は本物の台詞:
+${template}
+名前は ${names.join("、")} と一字一句同じ。一人1〜2文。同じ内容の使い回し禁止。英語のタグやプロンプトは書かない。
+
+${quietInstruction}
 ${userNameInstruction}
 ${memoryInstruction}
 ${context.avoidQuestion ? "今回は質問で終えません。" : ""}
 現在の好感度目安: ${affection}/100。急に恋人のようにはしません。`;
 }
 
-export function parseGroupReply(reply: string, members: Character[]) {
+export function parseGroupReply(reply: string, members: Character[]): GroupReplyPart[] {
   const lines = reply.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  const parts: Array<{ content: string; speakerId: string; speakerName: string }> = [];
+  const collected: GroupReplyPart[] = [];
   for (const line of lines) {
-    const matched = line.match(/^(.{1,20}?)[:：]\s*(.+)$/);
+    const matched = line.match(/^(?:\*{0,2}|#{0,3}\s*)(.{1,24}?)(?:\*{0,2})[:：]\s*(.+)$/);
     if (!matched) {
-      if (parts.length) parts[parts.length - 1].content += `\n${line}`;
+      if (collected.length) collected[collected.length - 1].content += `\n${line}`;
       continue;
     }
-    const name = matched[1].replace(/^\*+|\*+$/g, "").trim();
+    const name = matched[1].replace(/^\*+|\*+$/g, "").replace(/^[\d.、)\s]+/, "").trim();
     const member = members.find((item) => item.name === name) || members.find((item) => name.includes(item.name) || item.name.includes(name));
     if (!member) {
-      if (parts.length) parts[parts.length - 1].content += `\n${line}`;
-      else parts.push({ speakerId: members[0].id, speakerName: members[0].name, content: line });
+      if (collected.length) collected[collected.length - 1].content += `\n${line}`;
+      else collected.push({ speakerId: members[0].id, speakerName: members[0].name, content: line });
       continue;
     }
-    parts.push({ speakerId: member.id, speakerName: member.name, content: matched[2].trim() });
+    collected.push({ speakerId: member.id, speakerName: member.name, content: matched[2].trim() });
   }
-  if (!parts.length && members[0]) parts.push({ speakerId: members[0].id, speakerName: members[0].name, content: reply });
-  return parts.slice(0, 4);
+  if (!collected.length && members[0]) collected.push({ speakerId: members[0].id, speakerName: members[0].name, content: reply });
+  const byId = new Map<string, GroupReplyPart>();
+  const order: string[] = [];
+  for (const part of collected) {
+    const existing = byId.get(part.speakerId);
+    if (existing) {
+      existing.content += `\n${part.content}`;
+      continue;
+    }
+    byId.set(part.speakerId, { ...part });
+    order.push(part.speakerId);
+  }
+  return order.flatMap((id) => {
+    const part = byId.get(id);
+    return part ? [part] : [];
+  });
+}
+
+export function missingGroupMembers(parts: GroupReplyPart[], members: Character[]) {
+  const seen = new Set(parts.map((part) => part.speakerId));
+  return members.filter((member) => !seen.has(member.id));
+}
+
+export function mergeGroupParts(primary: GroupReplyPart[], extra: GroupReplyPart[], members: Character[]) {
+  const byId = new Map<string, GroupReplyPart>();
+  const order: string[] = [];
+  for (const part of [...primary, ...extra]) {
+    const content = part.content.trim();
+    if (!content || byId.has(part.speakerId)) continue;
+    byId.set(part.speakerId, { ...part, content });
+    order.push(part.speakerId);
+  }
+  for (const member of members) {
+    if (byId.has(member.id) && !order.includes(member.id)) order.push(member.id);
+  }
+  return order.flatMap((id) => {
+    const part = byId.get(id);
+    return part ? [part] : [];
+  });
+}
+
+export function fillPromptForMissing(missing: Character[], spoken: GroupReplyPart[]) {
+  const spokenNames = spoken.map((part) => part.speakerName).join("、");
+  const template = missing.map((member) => `${member.name}: （この人の口調で1〜2文）`).join("\n");
+  return `まだ発言していない人がいます。今から ${missing.map((member) => member.name).join("、")} だけが、それぞれ1回ずつ発言してください。すでに話した人（${spokenNames || "なし"}）は出さないでください。説明文や括弧書きは不要。次の行だけをこの順で、本物の台詞として出してください:\n${template}`;
 }
 
 export function speakerForPhoto(text: string, members: Character[], lastSpeakerId?: string) {
