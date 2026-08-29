@@ -1,7 +1,7 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
-import { playLeadPrompt, playLoras, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
+import { playLeadPrompt, playLoras, playNegatives, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -81,10 +81,8 @@ export async function POST(request: Request) {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
       const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
       const anatomyNegative = "2girls, two women, two heads, extra arms, extra breasts, third breast, collage, giant, elongated body";
-      const clothingNegative = play.includes("lingerie") && !play.includes("nude") && !playUsesPornModel(play)
-        ? "fully nude"
-        : "extra breasts, two heads";
-      const negativePrompt = `${baseNegative}, ${anatomyNegative}, ${clothingNegative}`;
+      const playNegative = playNegatives(play);
+      const negativePrompt = `${baseNegative}, ${anatomyNegative}, ${playNegative}`;
       const loras = playLoras(play);
       return generateModelsLabImages({
         prompt,
