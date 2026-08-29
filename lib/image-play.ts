@@ -31,19 +31,19 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
     id: "closeup",
     pattern: /(局部のみ|局部アップ|局部接写|局部|接写|クローズアップ|close-?up)/i,
     prompt: "genital close-up",
-    lead: "(extreme close-up:1.65), (pussy:1.7), vagina, labia, wet, no face, cropped",
+    lead: "(extreme close-up:1.7), (pussy:1.75), vagina, labia, wet, no face, no breasts, cropped macro photo",
   },
   {
     id: "spread",
     pattern: /(マンコくぱぁ|おまんこくぱぁ|まんこくぱぁ|くぱぁ|くぱあ|おまんこ|マンコ|pussy spread|spread pussy)/i,
     prompt: "spread pussy",
-    lead: "(solo:1.7), (1girl:1.6), lying on back, (legs spread:1.55), (spread pussy:1.7), showing vagina, looking at viewer",
+    lead: "(solo:1.7), (1girl:1.6), lying on back, (legs spread:1.6), (fingers spreading pussy:1.7), showing vagina, looking at viewer",
   },
   {
     id: "anal",
     pattern: /(アナルくぱぁ|アナル|anus spread|spread anus)/i,
     prompt: "spread anus",
-    lead: "(solo:1.7), (1girl:1.6), on all fours, ass towards viewer, (spread anus:1.7), showing asshole, looking back",
+    lead: "(solo:1.7), (1girl:1.6), on all fours, ass towards viewer, (hands spreading ass:1.65), (spread anus:1.7), showing asshole, looking back",
   },
   {
     id: "sex",
@@ -124,7 +124,7 @@ export function playBasePrompt(category: PlayCategory, imagePrompt = "", age = 4
 export function playImg2ImgStrength(category: PlayCategory) {
   if (category === "toy") return 0.52;
   if (category === "semen") return 0.68;
-  if (category === "spread" || category === "anal") return 0.58;
+  if (category === "spread" || category === "anal") return 0.7;
   return 0.55;
 }
 
@@ -168,14 +168,15 @@ export function playEngine(categories: PlayCategory[]) {
   if (!categories.length) {
     return { modelId: "realistic-vision-51", nsfwModel: false, sdxl: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
   }
-  if (playNeedsPartner(categories)) {
+  if (playNeedsPartner(categories) || categories.includes("closeup")) {
     return { modelId: "lustify", nsfwModel: true, sdxl: true, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
   }
   return { modelId: KNOWN_NSFW, nsfwModel: true, sdxl: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
 }
 
-export function playFrame(categories: PlayCategory[]) {
-  if (categories.includes("closeup")) return { width: 512, height: 512 };
+export function playFrame(categories: PlayCategory[], sdxl = false) {
+  if (categories.includes("closeup")) return { width: sdxl ? 768 : 512, height: sdxl ? 768 : 512 };
+  if (sdxl) return { width: 768, height: 1024 };
   return { width: 512, height: 768 };
 }
 

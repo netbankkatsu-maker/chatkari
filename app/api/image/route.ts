@@ -84,8 +84,9 @@ export async function POST(request: Request) {
       const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
       const negativePrompt = playNegativePrompt(play, baseNegative);
       const engine = playEngine(play);
-      const frame = playFrame(play);
+      const frame = playFrame(play, engine.sdxl);
       const debugModelId = body.debug && typeof body.debugModelId === "string" ? body.debugModelId.trim().slice(0, 80) : "";
+      const category = play[0];
       const request = {
         prompt,
         negativePrompt,
@@ -97,11 +98,10 @@ export async function POST(request: Request) {
         loraModel: engine.loraModel,
         loraStrength: engine.loraStrength,
         guidanceScale: engine.sdxl ? 6 : playNeedsPartner(play) ? 6.5 : undefined,
-        width: engine.sdxl ? 768 : frame.width,
-        height: engine.sdxl ? 1024 : frame.height,
+        width: frame.width,
+        height: frame.height,
         clipSkip: engine.sdxl ? 1 : undefined,
       };
-      const category = play[0];
       const hardAct = category === "toy" || category === "semen" || category === "spread" || category === "anal";
       if (hardAct && category) {
         try {
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
         provider: "modelslab",
         referenceAttempted: Boolean(referenceImage),
         referenceUsed: generated.referenceUsed,
-        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "kupa-v1" } } : {}),
+        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "kupa-v2" } } : {}),
       });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";
