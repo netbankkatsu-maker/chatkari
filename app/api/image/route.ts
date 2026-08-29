@@ -95,7 +95,10 @@ export async function POST(request: Request) {
         modelId: debugModelId || engine.modelId,
         loraModel: engine.loraModel,
         loraStrength: engine.loraStrength,
-        guidanceScale: playNeedsPartner(play) ? 6.5 : undefined,
+        guidanceScale: engine.sdxl ? 6 : playNeedsPartner(play) ? 6.5 : undefined,
+        width: engine.sdxl ? 768 : undefined,
+        height: engine.sdxl ? 1024 : undefined,
+        clipSkip: engine.sdxl ? 1 : undefined,
       };
       const category = play[0];
       const hardAct = category === "toy" || category === "semen";
@@ -125,7 +128,7 @@ export async function POST(request: Request) {
         provider: "modelslab",
         referenceAttempted: Boolean(referenceImage),
         referenceUsed: generated.referenceUsed,
-        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "pov-v2" } } : {}),
+        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "lustify-v1" } } : {}),
       });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";

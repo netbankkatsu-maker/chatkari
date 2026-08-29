@@ -84,6 +84,9 @@ export async function generateModelsLabImages(input: {
   loraStrength?: string;
   strength?: number;
   guidanceScale?: number;
+  width?: number;
+  height?: number;
+  clipSkip?: number;
 }) {
   const key = process.env.MODELSLAB_API_KEY;
   if (!key) throw new ModelsLabApiError(503, "MODELSLAB_API_KEY is not configured");
@@ -94,14 +97,14 @@ export async function generateModelsLabImages(input: {
     prompt: input.style === "anime" ? `high quality detailed anime illustration, ${input.prompt}` : input.prompt,
     negative_prompt: input.negativePrompt,
     enhance_prompt: "no",
-    width: 512,
-    height: 768,
+    width: input.width || 512,
+    height: input.height || 768,
     samples,
     num_inference_steps: 31,
     safety_checker: input.enableSafetyChecker ? "yes" : "no",
     seed: null,
     guidance_scale: input.guidanceScale ?? (input.nsfwModel ? 7 : 7.5),
-    clip_skip: 2,
+    clip_skip: input.clipSkip ?? 2,
     scheduler: "UniPCMultistepScheduler",
     base64: false,
     temp: false,

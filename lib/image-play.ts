@@ -25,13 +25,13 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
     id: "oral",
     pattern: /(フェラ|口で|oral|fellatio)/i,
     prompt: "fellatio pov",
-    lead: "1girl, 1boy, pov, fellatio, penis, oral, looking at viewer, from above, close-up, japanese milf",
+    lead: "pov, fellatio, penis in mouth, japanese milf looking at viewer, close-up, first person, no male face",
   },
   {
     id: "sex",
     pattern: /(セックス|性交|性行為|中出し|sex|intercourse)/i,
     prompt: "cowgirl pov",
-    lead: "1girl, 1boy, pov, cowgirl, vaginal, penis, riding, looking at viewer, japanese milf, bedroom",
+    lead: "pov cowgirl, japanese milf riding a penis, vaginal sex, looking at viewer, first person, male face out of frame",
   },
   {
     id: "nude",
@@ -119,9 +119,12 @@ export function playNegativePrompt(categories: PlayCategory[], baseNegative: str
 
 export function playEngine(categories: PlayCategory[]) {
   if (!categories.length) {
-    return { modelId: "realistic-vision-51", nsfwModel: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
+    return { modelId: "realistic-vision-51", nsfwModel: false, sdxl: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
   }
-  return { modelId: KNOWN_NSFW, nsfwModel: true, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
+  if (playNeedsPartner(categories)) {
+    return { modelId: "lustify", nsfwModel: true, sdxl: true, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
+  }
+  return { modelId: KNOWN_NSFW, nsfwModel: true, sdxl: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
 }
 
 export function playLoras(categories: PlayCategory[]) {
