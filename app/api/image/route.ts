@@ -101,7 +101,7 @@ export async function POST(request: Request) {
         clipSkip: engine.sdxl ? 1 : undefined,
       };
       const category = play[0];
-      const hardAct = category === "toy" || category === "semen" || category === "oral";
+      const hardAct = category === "toy" || category === "semen";
       if (hardAct && category) {
         try {
           const nudeBase = await generateModelsLabImages({
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
         provider: "modelslab",
         referenceAttempted: Boolean(referenceImage),
         referenceUsed: generated.referenceUsed,
-        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "dildo-oral-v1" } } : {}),
+        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "dildo-oral-v2" } } : {}),
       });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";

@@ -25,7 +25,7 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
     id: "oral",
     pattern: /(フェラ|口で|oral|fellatio)/i,
     prompt: "dildo fellatio",
-    lead: "(solo:1.7), (1girl:1.6), close-up, (pink dildo in mouth:1.65), sucking a dildo, looking at viewer",
+    lead: "(solo:1.7), (1girl:1.6), close-up, (pink dildo in mouth:1.7), sucking a dildo, fellatio, looking at viewer, holding the dildo",
   },
   {
     id: "sex",
