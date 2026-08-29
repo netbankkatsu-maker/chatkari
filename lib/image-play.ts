@@ -31,7 +31,7 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
     id: "sex",
     pattern: /(セックス|性交|性行為|中出し|sex|intercourse)/i,
     prompt: "cowgirl pov",
-    lead: "pov cowgirl, japanese milf riding a penis, vaginal sex, looking at viewer, first person, male face out of frame",
+    lead: "pov missionary, japanese milf on her back, legs spread, penis in vagina, looking at viewer, male body out of frame except the penis",
   },
   {
     id: "nude",
