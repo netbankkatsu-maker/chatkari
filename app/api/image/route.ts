@@ -97,7 +97,7 @@ export async function POST(request: Request) {
         loraStrength: engine.loraStrength,
       };
       const category = play[0];
-      const hardAct = category === "toy" || category === "semen" || category === "oral" || category === "sex";
+      const hardAct = category === "toy" || category === "semen";
       if (hardAct && category) {
         try {
           const nudeBase = await generateModelsLabImages({
