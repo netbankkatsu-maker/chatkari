@@ -98,7 +98,7 @@ export async function POST(request: Request) {
         modelId: debugModelId || engine.modelId,
         loraModel: engine.loraModel,
         loraStrength: engine.loraStrength,
-        guidanceScale: engine.sdxl ? 6 : category === "lingerie" ? 7.5 : playNeedsPartner(play) ? 6.5 : undefined,
+        guidanceScale: engine.sdxl ? 6 : category === "lingerie" || category === "undies" ? 8 : playNeedsPartner(play) ? 6.5 : undefined,
         width: frame.width,
         height: frame.height,
         clipSkip: engine.sdxl ? 1 : undefined,

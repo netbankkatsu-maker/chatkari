@@ -207,7 +207,7 @@ const questionOnly = /(好き|趣味|撮るの|よく撮)/;
 export function isImageRequest(text: string) {
   const normalized = text.replace(/\s/g, "");
   if (questionOnly.test(normalized) && !actionWords.test(normalized)) return false;
-  if (/(下着だけ|下着のみ|下着姿|ランジェリー).{0,16}(写真|画像|写メ|自撮り)|(写真|画像|写メ).{0,12}(下着だけ|下着のみ|下着姿)/.test(normalized)) return true;
+  if (/(下着だけ|下着のみ|パンツだけ|ブラだけ|ランジェリーだけ|下着姿|ランジェリー).{0,16}(写真|画像|写メ|自撮り)|(写真|画像|写メ).{0,12}(下着だけ|下着のみ|下着姿)/.test(normalized)) return true;
   if (requestWords.test(normalized) && actionWords.test(normalized)) return true;
   return /(下着姿|下着|フェラ|セックス|バイブ|精液|局部|くぱぁ|アナル|オナニー).{0,16}(写真|画像)?(送って|見せて|希望|ほしい|欲しい)/.test(normalized);
 }
