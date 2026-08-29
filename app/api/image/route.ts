@@ -1,7 +1,7 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
-import { playLeadPrompt, playLoras, playNegatives, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
+import { playEngine, playLeadPrompt, playNegatives, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       const anatomyNegative = "2girls, two women, two heads, extra arms, extra breasts, third breast, collage, giant, elongated body";
       const playNegative = playNegatives(play);
       const negativePrompt = `${baseNegative}, ${anatomyNegative}, ${playNegative}`;
-      const loras = playLoras(play);
+      const engine = playEngine(play);
       return generateModelsLabImages({
         prompt,
         negativePrompt,
@@ -91,9 +91,10 @@ export async function POST(request: Request) {
         samples: 1,
         referenceImage: modelslabReference,
         enableSafetyChecker: false,
-        nsfwModel: playUsesPornModel(play) || clothingMode === "explicit" || clothingMode === "nude",
-        loraModel: loras.loraModel,
-        loraStrength: loras.loraStrength,
+        nsfwModel: engine.nsfwModel || playUsesPornModel(play) || clothingMode === "explicit" || clothingMode === "nude",
+        modelId: engine.modelId,
+        loraModel: engine.loraModel,
+        loraStrength: engine.loraStrength,
       });
     };
 
