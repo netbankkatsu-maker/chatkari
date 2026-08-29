@@ -24,8 +24,8 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
   {
     id: "oral",
     pattern: /(フェラ|口で|oral|fellatio)/i,
-    prompt: "fellatio pov",
-    lead: "pov, fellatio, penis in mouth, japanese milf looking at viewer, close-up, first person, no male face",
+    prompt: "dildo fellatio",
+    lead: "(solo:1.7), (1girl:1.6), close-up, (pink dildo in mouth:1.65), sucking a dildo, looking at viewer",
   },
   {
     id: "sex",
@@ -55,6 +55,9 @@ export function resolvePlayCategories(text: string) {
   if (found.includes("lingerie") && found.includes("nude") && !/(全裸|ヌード|naked|fully nude)/i.test(text)) {
     return found.filter((id) => id !== "nude");
   }
+  if (found.includes("toy") && found.includes("oral") && /(フェラ|口で|oral|fellatio)/i.test(text)) {
+    return found.filter((id) => id !== "toy");
+  }
   if (found.includes("toy") && found.includes("sex") && /(バイブ|ディルド|vibrator|dildo)/i.test(text)) {
     return found.filter((id) => id !== "sex");
   }
@@ -75,12 +78,16 @@ export function playBasePrompt(category: PlayCategory, imagePrompt = "", age = 4
   if (category === "semen") {
     return `(solo:1.7), (1girl:1.6), (completely nude:1.3), close-up portrait, face and chest, looking at viewer, ${identity}, photorealistic`;
   }
+  if (category === "oral") {
+    return `(solo:1.7), (1girl:1.6), close-up face, looking at viewer, mouth slightly open, ${identity}, photorealistic`;
+  }
   return playLeadPrompt(["nude"], imagePrompt, age);
 }
 
 export function playImg2ImgStrength(category: PlayCategory) {
   if (category === "toy") return 0.52;
   if (category === "semen") return 0.68;
+  if (category === "oral") return 0.62;
   return 0.55;
 }
 
@@ -89,7 +96,7 @@ export function playUsesPornModel(categories: PlayCategory[]) {
 }
 
 export function playNeedsPartner(categories: PlayCategory[]) {
-  return categories.includes("oral") || categories.includes("sex");
+  return categories.includes("sex");
 }
 
 export function playNegatives(categories: PlayCategory[]) {
@@ -99,6 +106,7 @@ export function playNegatives(categories: PlayCategory[]) {
   ];
   if (categories.includes("toy")) extra.push("vibrator on head", "headband", "microphone", "holding wand", "toy in hand");
   if (categories.includes("semen")) extra.push("bottle", "cup", "glass", "jar", "lotion", "container", "pouring");
+  if (categories.includes("oral")) extra.push("two faces", "penis", "male body", "dildo on forehead", "microphone");
   if (categories.includes("nude") && !categories.includes("lingerie")) extra.push("clothes", "dress", "shirt");
   if (categories.includes("lingerie") && !categories.includes("nude")) extra.push("fully nude", "naked breasts");
   return extra.join(", ");
