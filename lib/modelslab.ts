@@ -82,6 +82,7 @@ export async function generateModelsLabImages(input: {
   modelId?: string;
   loraModel?: string;
   loraStrength?: string;
+  strength?: number;
 }) {
   const key = process.env.MODELSLAB_API_KEY;
   if (!key) throw new ModelsLabApiError(503, "MODELSLAB_API_KEY is not configured");
@@ -117,7 +118,7 @@ export async function generateModelsLabImages(input: {
       payload = await requestModelsLab("/img2img", {
         ...commonPayload,
         init_image: input.referenceImage,
-        strength: 0.62,
+        strength: Math.max(0.35, Math.min(0.8, input.strength ?? 0.55)),
       });
       referenceUsed = true;
     } catch (error) {

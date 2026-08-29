@@ -85,18 +85,34 @@ export async function POST(request: Request) {
       const playNegative = playNegatives(play);
       const negativePrompt = `${baseNegative}, ${anatomyNegative}, ${playNegative}`;
       const engine = playEngine(play);
-      return generateModelsLabImages({
+      const request = {
         prompt,
         negativePrompt,
         style: imageSettings.style,
-        samples: 1,
-        referenceImage: modelslabReference,
+        samples: 1 as const,
         enableSafetyChecker: false,
         nsfwModel: engine.nsfwModel || playUsesPornModel(play) || clothingMode === "explicit" || clothingMode === "nude",
         modelId: engine.modelId,
         loraModel: engine.loraModel,
         loraStrength: engine.loraStrength,
-      });
+      };
+      const hardAct = play[0] === "toy" || play[0] === "semen" || play[0] === "oral" || play[0] === "sex";
+      if (hardAct) {
+        try {
+          const nudeBase = await generateModelsLabImages({
+            ...request,
+            prompt: playLeadPrompt(["nude"], character.imagePrompt, character.age),
+          });
+          return generateModelsLabImages({
+            ...request,
+            referenceImage: nudeBase.urls[0],
+            strength: 0.55,
+          });
+        } catch {
+          return generateModelsLabImages(request);
+        }
+      }
+      return generateModelsLabImages({ ...request, referenceImage: modelslabReference });
     };
 
     if (imageSettings.provider === "modelslab" || clothingMode === "explicit" || clothingMode === "nude" || play.length > 0) {
