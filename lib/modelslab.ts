@@ -64,7 +64,7 @@ async function text2img(payload: Record<string, unknown>) {
     const current = String(payload.model_id || "");
     const next = FALLBACK_MODELS.find((model) => model !== current);
     if (!next) throw error;
-    const retry = { ...payload, model_id: next };
+    const retry: Record<string, unknown> = { ...payload, model_id: next };
     delete retry.lora_model;
     delete retry.lora_strength;
     return requestModelsLab("/text2img", retry);
