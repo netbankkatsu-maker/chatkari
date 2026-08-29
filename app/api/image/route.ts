@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       age: character.age,
     });
     const prompt = play.length
-      ? playLeadPrompt(play, character.appearance, character.age)
+      ? playLeadPrompt(play, character.imagePrompt, character.age)
       : `${identity}\n${scene}\nsolo, 1girl, only one woman\nlook ${character.age} years old, realistic smartphone photography`;
     const requestedReference = safeReferenceImage(body.referenceImage, request.url, body.referenceSource);
     const referenceImage = play.length

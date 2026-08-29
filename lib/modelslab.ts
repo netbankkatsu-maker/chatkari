@@ -9,6 +9,7 @@ const NSFW_MODELS: Record<ImageStyle, string> = {
   realistic: "uber-realistic-porn-merge",
   anime: "anything-v3",
 };
+const FALLBACK_MODELS = ["uber-realistic-porn-merge", "realistic-vision-51", "anything-v3"];
 
 type ModelsLabResponse = {
   status?: string;
@@ -31,6 +32,7 @@ const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resol
 function validOutputUrls(payload: ModelsLabResponse) {
   return [...(payload.output || []), ...(payload.proxy_links || [])].filter((value, index, all) => {
     if (typeof value !== "string" || all.indexOf(value) !== index) return false;
+    if (value.includes("?") && !value.includes("://")) return false;
     try { return new URL(value).protocol === "https:"; } catch { return false; }
   });
 }
@@ -52,6 +54,23 @@ async function requestModelsLab(path: string, body: unknown, timeoutMs = 95_000)
   return payload;
 }
 
+async function text2img(payload: Record<string, unknown>) {
+  try {
+    return await requestModelsLab("/text2img", payload);
+  } catch (error) {
+    if (!(error instanceof ModelsLabApiError)) throw error;
+    if ([401, 403, 429, 504].includes(error.status)) throw error;
+    if (!/model not found/i.test(error.message)) throw error;
+    const current = String(payload.model_id || "");
+    const next = FALLBACK_MODELS.find((model) => model !== current);
+    if (!next) throw error;
+    const retry = { ...payload, model_id: next };
+    delete retry.lora_model;
+    delete retry.lora_strength;
+    return requestModelsLab("/text2img", retry);
+  }
+}
+
 export async function generateModelsLabImages(input: {
   prompt: string;
   negativePrompt: string;
@@ -67,27 +86,30 @@ export async function generateModelsLabImages(input: {
   const key = process.env.MODELSLAB_API_KEY;
   if (!key) throw new ModelsLabApiError(503, "MODELSLAB_API_KEY is not configured");
   const samples = Math.max(1, Math.min(4, Math.round(input.samples)));
-  const commonPayload = {
+  const commonPayload: Record<string, unknown> = {
     key,
     model_id: input.modelId || (input.nsfwModel ? NSFW_MODELS[input.style] : MODELS[input.style]),
     prompt: input.style === "anime" ? `high quality detailed anime illustration, ${input.prompt}` : input.prompt,
     negative_prompt: input.negativePrompt,
     enhance_prompt: "no",
-    width: 768,
-    height: 1024,
+    width: 512,
+    height: 768,
     samples,
-    num_inference_steps: 28,
+    num_inference_steps: 31,
     safety_checker: input.enableSafetyChecker ? "yes" : "no",
     seed: null,
-    guidance_scale: 8.5,
+    guidance_scale: input.nsfwModel ? 7 : 7.5,
     clip_skip: 2,
     scheduler: "UniPCMultistepScheduler",
-    ...(input.loraModel ? { lora_model: input.loraModel, lora_strength: input.loraStrength || "0.3" } : {}),
     base64: false,
     temp: false,
     webhook: null,
     track_id: null,
   };
+  if (input.loraModel) {
+    commonPayload.lora_model = input.loraModel;
+    commonPayload.lora_strength = input.loraStrength || "0.3";
+  }
   let payload: ModelsLabResponse;
   let referenceUsed = false;
   if (input.referenceImage) {
@@ -100,21 +122,13 @@ export async function generateModelsLabImages(input: {
       referenceUsed = true;
     } catch (error) {
       if (error instanceof ModelsLabApiError && ![401, 403, 429, 504].includes(error.status)) {
-        payload = await requestModelsLab("/text2img", commonPayload);
+        payload = await text2img(commonPayload);
       } else {
         throw error;
       }
     }
   } else {
-    try {
-      payload = await requestModelsLab("/text2img", commonPayload);
-    } catch (error) {
-      if ((input.nsfwModel || input.modelId) && error instanceof ModelsLabApiError) {
-        payload = await requestModelsLab("/text2img", { ...commonPayload, model_id: "epicrealism", lora_model: null, lora_strength: null });
-      } else {
-        throw error;
-      }
-    }
+    payload = await text2img(commonPayload);
   }
   let urls = validOutputUrls(payload).slice(0, samples);
   if (urls.length) return { urls, referenceUsed };

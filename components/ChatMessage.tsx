@@ -1,9 +1,18 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { loadAudio } from "@/lib/audio-store";
 import type { ChatMessageData } from "@/lib/types";
+
+function ChatImage({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <p className="message-image-error">画像を表示できませんでした</p>;
+  return (
+    <div className="message-image">
+      <img src={src} alt={alt} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+    </div>
+  );
+}
 
 export function ChatMessage({ message }: { message: ChatMessageData }) {
   const [audioUrl, setAudioUrl] = useState<string>();
@@ -38,9 +47,7 @@ export function ChatMessage({ message }: { message: ChatMessageData }) {
         {message.content && (message.audioId
           ? <details className="voice-transcript"><summary>{message.role === "user" ? "文字起こし" : "メッセージを見る"}</summary><p>{message.content}</p></details>
           : <p>{message.content}</p>)}
-        {message.imageUrl && (
-          <div className="message-image"><Image src={message.imageUrl} alt={message.role === "user" ? "ユーザーが送った画像" : "AIキャラクターが送った生成画像"} fill sizes="(max-width: 640px) 72vw, 340px" unoptimized /></div>
-        )}
+        {message.imageUrl && <ChatImage src={message.imageUrl} alt={message.role === "user" ? "ユーザーが送った画像" : "AIキャラクターが送った生成画像"} />}
       </div>
     </div>
   );
