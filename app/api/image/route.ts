@@ -1,7 +1,7 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
-import { playEngine, playLeadPrompt, playNegatives, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
+import { playBasePrompt, playEngine, playImg2ImgStrength, playLeadPrompt, playNegatives, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -96,17 +96,18 @@ export async function POST(request: Request) {
         loraModel: engine.loraModel,
         loraStrength: engine.loraStrength,
       };
-      const hardAct = play[0] === "toy" || play[0] === "semen" || play[0] === "oral" || play[0] === "sex";
-      if (hardAct) {
+      const category = play[0];
+      const hardAct = category === "toy" || category === "semen" || category === "oral" || category === "sex";
+      if (hardAct && category) {
         try {
           const nudeBase = await generateModelsLabImages({
             ...request,
-            prompt: playLeadPrompt(["nude"], character.imagePrompt, character.age),
+            prompt: playBasePrompt(category, character.imagePrompt, character.age),
           });
           return generateModelsLabImages({
             ...request,
             referenceImage: nudeBase.urls[0],
-            strength: 0.55,
+            strength: playImg2ImgStrength(category),
           });
         } catch {
           return generateModelsLabImages(request);

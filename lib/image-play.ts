@@ -70,6 +70,28 @@ export function playLeadPrompt(categories: PlayCategory[], imagePrompt = "", age
   return [...leads, compactIdentity(imagePrompt, age), "photorealistic"].join(", ");
 }
 
+export function playBasePrompt(category: PlayCategory, imagePrompt = "", age = 40) {
+  const identity = compactIdentity(imagePrompt, age);
+  if (category === "semen") {
+    return `(solo:1.7), (1girl:1.6), (completely nude:1.3), close-up portrait, face and chest, looking at viewer, ${identity}, photorealistic`;
+  }
+  if (category === "oral") {
+    return `(solo:1.7), (1girl:1.6), close-up face, looking up at camera, mouth slightly open, from above, ${identity}, photorealistic`;
+  }
+  if (category === "sex") {
+    return `(solo:1.7), (1girl:1.6), (completely nude:1.4), sitting on bed, thighs open, looking at viewer, from slightly below, ${identity}, photorealistic`;
+  }
+  return playLeadPrompt(["nude"], imagePrompt, age);
+}
+
+export function playImg2ImgStrength(category: PlayCategory) {
+  if (category === "toy") return 0.52;
+  if (category === "semen") return 0.62;
+  if (category === "oral") return 0.7;
+  if (category === "sex") return 0.66;
+  return 0.55;
+}
+
 export function playUsesPornModel(categories: PlayCategory[]) {
   return categories.length > 0;
 }
