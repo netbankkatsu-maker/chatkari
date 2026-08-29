@@ -5,9 +5,9 @@ const KNOWN_NSFW = "uber-realistic-porn-merge";
 const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: string }> = [
   {
     id: "lingerie",
-    pattern: /(下着姿|下着|パンツ|ブラジャー|ブラ(?!ウス)|ランジェリー|lingerie|underwear)/i,
-    prompt: "bra and panties",
-    lead: "(solo:1.7), (1girl:1.6), (lingerie:1.45), matching lace bra and panties, underwear on, not nude, looking at viewer, bedroom",
+    pattern: /(下着だけ|下着のみ|下着姿|下着|パンツ|ブラジャー|ブラ(?!ウス)|ランジェリー|lingerie|underwear)/i,
+    prompt: "bra and panties only",
+    lead: "(solo:1.7), (1girl:1.6), full body, standing in bedroom, (wearing only a matching lace bra and panties:1.75), (lingerie:1.6), underwear on, nipples covered by bra, crotch covered by panties, not nude, not topless, looking at viewer",
   },
   {
     id: "toy",
@@ -65,33 +65,50 @@ function compactIdentity(imagePrompt: string, age: number) {
   return `${age}yo japanese milf, ${hair}, dark eyes, curvy`;
 }
 
-export function resolvePlayCategories(text: string) {
+function detectCategories(text: string) {
   const found: PlayCategory[] = [];
   for (const rule of rules) {
     if (rule.pattern.test(text) && !found.includes(rule.id)) found.push(rule.id);
   }
-  if (found.includes("lingerie") && found.includes("nude") && !/(全裸|ヌード|naked|fully nude)/i.test(text)) {
+  return found;
+}
+
+const HARD_NSFW = /(全裸|裸にして|裸の写真|ヌード|脱いで|脱いだ|フェラ|セックス|性交|バイブ|ディルド|精液|ぶっかけ|局部|くぱぁ|アナル|オナニー|nude|naked|fellatio|sex)/i;
+const UNDERWEAR_ONLY = /(下着だけ|下着のみ|下着姿だけ|パンツだけ|ブラだけ|ランジェリーだけ|下着姿|ランジェリー|(?:ブラとパンツ|パンツとブラ))/i;
+const UNDERWEAR_PHOTO = /(下着|パンツ|ブラジャー|ブラ(?!ウス)|ランジェリー).{0,16}(写真|画像|写メ|自撮り)|(写真|画像|写メ|自撮り).{0,16}(下着|パンツ|ブラジャー|ランジェリー)/i;
+
+export function resolvePlayCategories(text: string, requestText = "") {
+  const focus = requestText.trim();
+  if (focus && (UNDERWEAR_ONLY.test(focus) || UNDERWEAR_PHOTO.test(focus)) && !HARD_NSFW.test(focus)) {
+    return ["lingerie"] as PlayCategory[];
+  }
+  const found = detectCategories(focus || text);
+  if (found.includes("lingerie") && found.includes("nude") && !/(全裸|ヌード|naked|fully nude)/i.test(focus || text)) {
     return found.filter((id) => id !== "nude");
   }
-  if (found.includes("toy") && found.includes("oral") && /(フェラ|口で|oral|fellatio)/i.test(text)) {
+  if (found.includes("toy") && found.includes("oral") && /(フェラ|口で|oral|fellatio)/i.test(focus || text)) {
     return found.filter((id) => id !== "toy");
   }
   if (found.includes("anal") && found.includes("spread")) {
     return found.filter((id) => id !== "spread");
   }
   if (found.includes("closeup") && found.includes("spread")) {
-    if (/(くぱぁ|くぱあ)/i.test(text) && !/(局部|接写|close-?up)/i.test(text)) {
+    if (/(くぱぁ|くぱあ)/i.test(focus || text) && !/(局部|接写|close-?up)/i.test(focus || text)) {
       return found.filter((id) => id !== "closeup");
     }
     return found.filter((id) => id !== "spread");
   }
   if (found.includes("anal") && found.includes("sex")) {
-    if (/(くぱぁ|くぱあ|局部)/i.test(text) || !/(セックス|性交|性行為|中出し|sex)/i.test(text)) {
+    if (/(くぱぁ|くぱあ|局部)/i.test(focus || text) || !/(セックス|性交|性行為|中出し|sex)/i.test(focus || text)) {
       return found.filter((id) => id !== "sex");
     }
     return found.filter((id) => id !== "anal");
   }
-  return found.slice(0, 1);
+  if (found.includes("lingerie") && found.length > 1 && !HARD_NSFW.test(focus || text)) {
+    return ["lingerie"] as PlayCategory[];
+  }
+  if (found.length) return found.slice(0, 1);
+  return detectCategories(text).slice(0, 1);
 }
 
 export function playPromptAddons(categories: PlayCategory[]) {
@@ -129,7 +146,7 @@ export function playImg2ImgStrength(category: PlayCategory) {
 }
 
 export function playUsesPornModel(categories: PlayCategory[]) {
-  return categories.length > 0;
+  return categories.length > 0 && !categories.includes("lingerie");
 }
 
 export function playNeedsPartner(categories: PlayCategory[]) {
@@ -141,6 +158,10 @@ export function playNegatives(categories: PlayCategory[]) {
     "(2girls:1.8)", "(two people:1.7)", "multiple girls", "couple", "twins", "second person",
     "male face", "crowd", "collage", "split screen", "cloned face", "group",
   ];
+  if (categories.includes("lingerie")) extra.push(
+    "nude", "naked", "completely nude", "topless", "bottomless", "no bra", "no panties",
+    "nipples", "areola", "pussy", "vagina", "penis", "sex", "dress", "shirt", "jeans", "coat", "jacket",
+  );
   if (categories.includes("toy")) extra.push("vibrator on head", "headband", "microphone", "holding wand", "toy in hand");
   if (categories.includes("semen")) extra.push("bottle", "cup", "glass", "jar", "lotion", "container", "pouring");
   if (categories.includes("oral")) extra.push("two faces", "penis", "male body", "dildo on forehead", "microphone");
@@ -167,6 +188,9 @@ export function playNegativePrompt(categories: PlayCategory[], baseNegative: str
 export function playEngine(categories: PlayCategory[]) {
   if (!categories.length) {
     return { modelId: "realistic-vision-51", nsfwModel: false, sdxl: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
+  }
+  if (categories.includes("lingerie")) {
+    return { modelId: "realistic-vision-51", nsfwModel: true, sdxl: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
   }
   if (playNeedsPartner(categories) || categories.includes("closeup")) {
     return { modelId: "lustify", nsfwModel: true, sdxl: true, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };

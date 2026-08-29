@@ -201,14 +201,15 @@ export function speakerForPhoto(text: string, members: Character[], lastSpeakerI
 }
 
 const requestWords = /(写真|画像|自撮り|写メ|ヌード|全裸)/;
-const actionWords = /(送って|見せて|見たい|ちょうだい|撮って|見せられる)/;
+const actionWords = /(送って|見せて|見たい|ちょうだい|撮って|見せられる|希望|ほしい|欲しい|お願い)/;
 const questionOnly = /(好き|趣味|撮るの|よく撮)/;
 
 export function isImageRequest(text: string) {
   const normalized = text.replace(/\s/g, "");
   if (questionOnly.test(normalized) && !actionWords.test(normalized)) return false;
+  if (/(下着だけ|下着のみ|下着姿|ランジェリー).{0,16}(写真|画像|写メ|自撮り)|(写真|画像|写メ).{0,12}(下着だけ|下着のみ|下着姿)/.test(normalized)) return true;
   if (requestWords.test(normalized) && actionWords.test(normalized)) return true;
-  return /(下着姿|下着|フェラ|セックス|バイブ|精液|局部|くぱぁ|アナル|オナニー).{0,16}(写真|画像)?(送って|見せて)/.test(normalized);
+  return /(下着姿|下着|フェラ|セックス|バイブ|精液|局部|くぱぁ|アナル|オナニー).{0,16}(写真|画像)?(送って|見せて|希望|ほしい|欲しい)/.test(normalized);
 }
 
 const directImageAction = /(画像|写真|自撮り|写メ|イラスト|絵|全裸|裸|ヌード|下着).{0,12}(送って|見せて|見たい|ちょうだい)|(?:送って|見せて).{0,12}(画像|写真|自撮り|写メ)/;

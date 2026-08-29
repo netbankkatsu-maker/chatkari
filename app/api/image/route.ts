@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const customImagePrompt = String(body.customImagePrompt || "").slice(0, 500);
     const recentContext = String(body.recentContext || "").slice(0, 1200);
     const photoDescription = String(body.photoDescription || "").slice(0, 500);
-    const play = isProfile ? [] : resolvePlayCategories(`${requestText}\n${customImagePrompt}\n${photoDescription}\n${recentContext}`);
+    const play = isProfile ? [] : resolvePlayCategories(`${requestText}\n${customImagePrompt}\n${photoDescription}\n${recentContext}`, requestText);
     const clothingMode = isProfile ? "clothed" : resolveClothingMode(requestText, customImagePrompt, imageSettings.safetyLevel, recentContext);
     const optimizedRequest = isProfile ? "" : buildOptimizedImageRequest({
       requestText,
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
         modelId: debugModelId || engine.modelId,
         loraModel: engine.loraModel,
         loraStrength: engine.loraStrength,
-        guidanceScale: engine.sdxl ? 6 : playNeedsPartner(play) ? 6.5 : undefined,
+        guidanceScale: engine.sdxl ? 6 : category === "lingerie" ? 7.5 : playNeedsPartner(play) ? 6.5 : undefined,
         width: frame.width,
         height: frame.height,
         clipSkip: engine.sdxl ? 1 : undefined,
