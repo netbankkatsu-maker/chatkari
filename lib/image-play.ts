@@ -1,4 +1,4 @@
-export type PlayCategory = "lingerie" | "toy" | "semen" | "oral" | "sex" | "nude";
+export type PlayCategory = "lingerie" | "toy" | "semen" | "oral" | "sex" | "nude" | "spread" | "anal" | "closeup";
 
 const KNOWN_NSFW = "uber-realistic-porn-merge";
 
@@ -26,6 +26,24 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
     pattern: /(フェラ|口で|oral|fellatio)/i,
     prompt: "dildo fellatio",
     lead: "(solo:1.7), (1girl:1.6), close-up, (pink dildo in mouth:1.7), sucking a dildo, fellatio, looking at viewer, holding the dildo",
+  },
+  {
+    id: "closeup",
+    pattern: /(局部のみ|局部アップ|局部接写|局部|接写|クローズアップ|close-?up)/i,
+    prompt: "genital close-up",
+    lead: "(extreme close-up:1.65), (pussy:1.7), vagina, labia, wet, no face, cropped",
+  },
+  {
+    id: "spread",
+    pattern: /(マンコくぱぁ|おまんこくぱぁ|まんこくぱぁ|くぱぁ|くぱあ|おまんこ|マンコ|pussy spread|spread pussy)/i,
+    prompt: "spread pussy",
+    lead: "(solo:1.7), (1girl:1.6), lying on back, (legs spread:1.55), (spread pussy:1.7), showing vagina, looking at viewer",
+  },
+  {
+    id: "anal",
+    pattern: /(アナルくぱぁ|アナル|anus spread|spread anus)/i,
+    prompt: "spread anus",
+    lead: "(solo:1.7), (1girl:1.6), on all fours, ass towards viewer, (spread anus:1.7), showing asshole, looking back",
   },
   {
     id: "sex",
@@ -58,8 +76,20 @@ export function resolvePlayCategories(text: string) {
   if (found.includes("toy") && found.includes("oral") && /(フェラ|口で|oral|fellatio)/i.test(text)) {
     return found.filter((id) => id !== "toy");
   }
-  if (found.includes("toy") && found.includes("sex") && /(バイブ|ディルド|vibrator|dildo)/i.test(text)) {
-    return found.filter((id) => id !== "sex");
+  if (found.includes("anal") && found.includes("spread")) {
+    return found.filter((id) => id !== "spread");
+  }
+  if (found.includes("closeup") && found.includes("spread")) {
+    if (/(くぱぁ|くぱあ)/i.test(text) && !/(局部|接写|close-?up)/i.test(text)) {
+      return found.filter((id) => id !== "closeup");
+    }
+    return found.filter((id) => id !== "spread");
+  }
+  if (found.includes("anal") && found.includes("sex")) {
+    if (/(くぱぁ|くぱあ|局部)/i.test(text) || !/(セックス|性交|性行為|中出し|sex)/i.test(text)) {
+      return found.filter((id) => id !== "sex");
+    }
+    return found.filter((id) => id !== "anal");
   }
   return found.slice(0, 1);
 }
@@ -70,7 +100,8 @@ export function playPromptAddons(categories: PlayCategory[]) {
 
 export function playLeadPrompt(categories: PlayCategory[], imagePrompt = "", age = 40) {
   const leads = rules.filter((rule) => categories.includes(rule.id)).map((rule) => rule.lead);
-  return [...leads, compactIdentity(imagePrompt, age), "photorealistic"].join(", ");
+  const identity = categories.includes("closeup") ? `${age}yo japanese milf` : compactIdentity(imagePrompt, age);
+  return [...leads, identity, "photorealistic"].join(", ");
 }
 
 export function playBasePrompt(category: PlayCategory, imagePrompt = "", age = 40) {
@@ -81,13 +112,19 @@ export function playBasePrompt(category: PlayCategory, imagePrompt = "", age = 4
   if (category === "oral") {
     return `(solo:1.7), (1girl:1.6), close-up face, looking at viewer, mouth slightly open, ${identity}, photorealistic`;
   }
+  if (category === "spread") {
+    return `(solo:1.7), (1girl:1.6), (completely nude:1.4), lying on back, legs spread, looking at viewer, ${identity}, photorealistic`;
+  }
+  if (category === "anal") {
+    return `(solo:1.7), (1girl:1.6), (completely nude:1.4), on all fours, ass towards viewer, looking back, ${identity}, photorealistic`;
+  }
   return playLeadPrompt(["nude"], imagePrompt, age);
 }
 
 export function playImg2ImgStrength(category: PlayCategory) {
   if (category === "toy") return 0.52;
   if (category === "semen") return 0.68;
-  if (category === "oral") return 0.62;
+  if (category === "spread" || category === "anal") return 0.58;
   return 0.55;
 }
 
@@ -108,7 +145,9 @@ export function playNegatives(categories: PlayCategory[]) {
   if (categories.includes("semen")) extra.push("bottle", "cup", "glass", "jar", "lotion", "container", "pouring");
   if (categories.includes("oral")) extra.push("two faces", "penis", "male body", "dildo on forehead", "microphone");
   if (categories.includes("nude") && !categories.includes("lingerie")) extra.push("clothes", "dress", "shirt");
-  if (categories.includes("lingerie") && !categories.includes("nude")) extra.push("fully nude", "naked breasts");
+  if (categories.includes("spread")) extra.push("closed legs", "panties", "clothes");
+  if (categories.includes("anal")) extra.push("front view", "clothes", "standing");
+  if (categories.includes("closeup")) extra.push("face", "eyes", "hair", "clothes", "full body");
   return extra.join(", ");
 }
 
@@ -133,6 +172,11 @@ export function playEngine(categories: PlayCategory[]) {
     return { modelId: "lustify", nsfwModel: true, sdxl: true, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
   }
   return { modelId: KNOWN_NSFW, nsfwModel: true, sdxl: false, loraModel: undefined as string | undefined, loraStrength: undefined as string | undefined };
+}
+
+export function playFrame(categories: PlayCategory[]) {
+  if (categories.includes("closeup")) return { width: 512, height: 512 };
+  return { width: 512, height: 768 };
 }
 
 export function playLoras(categories: PlayCategory[]) {

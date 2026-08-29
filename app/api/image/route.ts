@@ -1,7 +1,7 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
-import { playBasePrompt, playEngine, playImg2ImgStrength, playLeadPrompt, playNeedsPartner, playNegativePrompt, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
+import { playBasePrompt, playEngine, playFrame, playImg2ImgStrength, playLeadPrompt, playNeedsPartner, playNegativePrompt, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -84,6 +84,7 @@ export async function POST(request: Request) {
       const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
       const negativePrompt = playNegativePrompt(play, baseNegative);
       const engine = playEngine(play);
+      const frame = playFrame(play);
       const debugModelId = body.debug && typeof body.debugModelId === "string" ? body.debugModelId.trim().slice(0, 80) : "";
       const request = {
         prompt,
@@ -96,12 +97,12 @@ export async function POST(request: Request) {
         loraModel: engine.loraModel,
         loraStrength: engine.loraStrength,
         guidanceScale: engine.sdxl ? 6 : playNeedsPartner(play) ? 6.5 : undefined,
-        width: engine.sdxl ? 768 : undefined,
-        height: engine.sdxl ? 1024 : undefined,
+        width: engine.sdxl ? 768 : frame.width,
+        height: engine.sdxl ? 1024 : frame.height,
         clipSkip: engine.sdxl ? 1 : undefined,
       };
       const category = play[0];
-      const hardAct = category === "toy" || category === "semen";
+      const hardAct = category === "toy" || category === "semen" || category === "spread" || category === "anal";
       if (hardAct && category) {
         try {
           const nudeBase = await generateModelsLabImages({
@@ -128,7 +129,7 @@ export async function POST(request: Request) {
         provider: "modelslab",
         referenceAttempted: Boolean(referenceImage),
         referenceUsed: generated.referenceUsed,
-        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "dildo-oral-v2" } } : {}),
+        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "kupa-v1" } } : {}),
       });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";
