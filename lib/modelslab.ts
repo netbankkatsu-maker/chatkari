@@ -6,7 +6,7 @@ const MODELS: Record<ImageStyle, string> = {
   anime: "anything-v3",
 };
 const NSFW_MODELS: Record<ImageStyle, string> = {
-  realistic: "epicrealism",
+  realistic: "uber-realistic-porn-merge",
   anime: "anything-v3",
 };
 
@@ -81,8 +81,7 @@ export async function generateModelsLabImages(input: {
     guidance_scale: 8.5,
     clip_skip: 2,
     scheduler: "UniPCMultistepScheduler",
-    lora_model: input.loraModel || null,
-    lora_strength: input.loraStrength || null,
+    ...(input.loraModel ? { lora_model: input.loraModel, lora_strength: input.loraStrength || "0.4" } : {}),
     base64: false,
     temp: false,
     webhook: null,
@@ -110,7 +109,10 @@ export async function generateModelsLabImages(input: {
       payload = await requestModelsLab("/text2img", commonPayload);
     } catch (error) {
       if (input.nsfwModel && error instanceof ModelsLabApiError) {
-        payload = await requestModelsLab("/text2img", { ...commonPayload, model_id: MODELS[input.style] });
+        payload = await requestModelsLab("/text2img", { ...commonPayload, model_id: "epicrealism" });
+        try {
+          // keep going
+        } catch {}
       } else {
         throw error;
       }
