@@ -1,7 +1,7 @@
 import { resolveCharacter } from "@/data/characters";
 import { IMAGE_MODEL, publicApiError, XaiApiError, xaiFetch } from "@/lib/xai";
 import { buildIdentityLock, buildOptimizedImageRequest, resolveClothingMode, UnsafeImagePromptError } from "@/lib/image-prompt";
-import { playBasePrompt, playEngine, playImg2ImgStrength, playLeadPrompt, playNegatives, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
+import { playBasePrompt, playEngine, playImg2ImgStrength, playLeadPrompt, playNeedsPartner, playNegativePrompt, playPromptAddons, playUsesPornModel, resolvePlayCategories } from "@/lib/image-play";
 import { referenceRequested } from "@/lib/image-reference";
 import { sanitizeImageSettings } from "@/lib/image-settings";
 import { generateModelsLabImages, MODELSLAB_NEGATIVE_PROMPT, MODELSLAB_STRICT_NEGATIVE_PROMPT, ModelsLabApiError } from "@/lib/modelslab";
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       imageSettings?: unknown;
       referenceSource?: "conversation" | "profile" | "none";
       debug?: boolean;
+      debugModelId?: string;
     };
     const character = resolveCharacter(body.characterId, body.character);
     if (!character) return Response.json({ error: "キャラクターが見つかりません。" }, { status: 400 });
@@ -81,10 +82,9 @@ export async function POST(request: Request) {
     const modelsLabFallback = async () => {
       const modelslabReference = referenceImage?.startsWith("data:image/") ? referenceImage.slice(referenceImage.indexOf(",") + 1) : referenceImage;
       const baseNegative = imageSettings.safetyLevel === "strict" ? MODELSLAB_STRICT_NEGATIVE_PROMPT : MODELSLAB_NEGATIVE_PROMPT;
-      const anatomyNegative = "2girls, two women, two heads, extra arms, extra breasts, third breast, collage, giant, elongated body";
-      const playNegative = playNegatives(play);
-      const negativePrompt = `${baseNegative}, ${anatomyNegative}, ${playNegative}`;
+      const negativePrompt = playNegativePrompt(play, baseNegative);
       const engine = playEngine(play);
+      const debugModelId = body.debug && typeof body.debugModelId === "string" ? body.debugModelId.trim().slice(0, 80) : "";
       const request = {
         prompt,
         negativePrompt,
@@ -92,12 +92,13 @@ export async function POST(request: Request) {
         samples: 1 as const,
         enableSafetyChecker: false,
         nsfwModel: engine.nsfwModel || playUsesPornModel(play) || clothingMode === "explicit" || clothingMode === "nude",
-        modelId: engine.modelId,
+        modelId: debugModelId || engine.modelId,
         loraModel: engine.loraModel,
         loraStrength: engine.loraStrength,
+        guidanceScale: playNeedsPartner(play) ? 6.5 : undefined,
       };
       const category = play[0];
-      const hardAct = category === "toy" || category === "semen" || category === "oral" || category === "sex";
+      const hardAct = category === "toy" || category === "semen";
       if (hardAct && category) {
         try {
           const nudeBase = await generateModelsLabImages({
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
         provider: "modelslab",
         referenceAttempted: Boolean(referenceImage),
         referenceUsed: generated.referenceUsed,
-        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "two-step-v1" } } : {}),
+        ...(body.debug ? { debug: { prompt, play, clothingMode, modelId: playEngine(play).modelId, pipeline: "pov-v2" } } : {}),
       });
     }
     const path = referenceImage ? "/images/edits" : "/images/generations";

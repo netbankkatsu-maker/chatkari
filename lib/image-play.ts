@@ -25,13 +25,13 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
     id: "oral",
     pattern: /(フェラ|口で|oral|fellatio)/i,
     prompt: "fellatio pov",
-    lead: "(penis in mouth:1.7), (pov fellatio:1.65), 1girl, close-up, looking up, male out of frame",
+    lead: "1girl, 1boy, pov, fellatio, penis, oral, looking at viewer, from above, close-up, japanese milf",
   },
   {
     id: "sex",
     pattern: /(セックス|性交|性行為|中出し|sex|intercourse)/i,
     prompt: "cowgirl pov",
-    lead: "(penis:1.65), (vaginal:1.6), (pov cowgirl:1.55), 1girl, riding, looking at viewer, male out of frame",
+    lead: "1girl, 1boy, pov, cowgirl, vaginal, penis, riding, looking at viewer, japanese milf, bedroom",
   },
   {
     id: "nude",
@@ -75,25 +75,21 @@ export function playBasePrompt(category: PlayCategory, imagePrompt = "", age = 4
   if (category === "semen") {
     return `(solo:1.7), (1girl:1.6), (completely nude:1.3), close-up portrait, face and chest, looking at viewer, ${identity}, photorealistic`;
   }
-  if (category === "oral") {
-    return `(solo:1.7), (1girl:1.6), close-up face, looking up at camera, mouth slightly open, from above, ${identity}, photorealistic`;
-  }
-  if (category === "sex") {
-    return `(solo:1.7), (1girl:1.6), (completely nude:1.4), sitting on bed, thighs open, looking at viewer, from slightly below, ${identity}, photorealistic`;
-  }
   return playLeadPrompt(["nude"], imagePrompt, age);
 }
 
 export function playImg2ImgStrength(category: PlayCategory) {
   if (category === "toy") return 0.52;
   if (category === "semen") return 0.68;
-  if (category === "oral") return 0.78;
-  if (category === "sex") return 0.74;
   return 0.55;
 }
 
 export function playUsesPornModel(categories: PlayCategory[]) {
   return categories.length > 0;
+}
+
+export function playNeedsPartner(categories: PlayCategory[]) {
+  return categories.includes("oral") || categories.includes("sex");
 }
 
 export function playNegatives(categories: PlayCategory[]) {
@@ -103,11 +99,22 @@ export function playNegatives(categories: PlayCategory[]) {
   ];
   if (categories.includes("toy")) extra.push("vibrator on head", "headband", "microphone", "holding wand", "toy in hand");
   if (categories.includes("semen")) extra.push("bottle", "cup", "glass", "jar", "lotion", "container", "pouring");
-  if (categories.includes("oral")) extra.push("two faces", "two heads", "fused faces", "giant penis", "male body");
-  if (categories.includes("sex")) extra.push("standing fully clothed", "futanari", "woman with penis", "male face");
   if (categories.includes("nude") && !categories.includes("lingerie")) extra.push("clothes", "dress", "shirt");
   if (categories.includes("lingerie") && !categories.includes("nude")) extra.push("fully nude", "naked breasts");
   return extra.join(", ");
+}
+
+export function playNegativePrompt(categories: PlayCategory[], baseNegative: string) {
+  if (playNeedsPartner(categories)) {
+    return [
+      "2girls", "two girls", "two women", "two faces", "two heads", "twins",
+      "male face", "man's face", "beard", "full male body", "standing couple",
+      "clothes", "dress", "shirt", "futanari", "woman with penis",
+      "low quality", "blurry", "bad anatomy", "deformed", "extra fingers",
+      "collage", "split screen", "watermark", "child", "teen", "underage",
+    ].join(", ");
+  }
+  return `${baseNegative}, 2girls, two women, two heads, extra arms, extra breasts, third breast, collage, giant, elongated body, ${playNegatives(categories)}`;
 }
 
 export function playEngine(categories: PlayCategory[]) {
