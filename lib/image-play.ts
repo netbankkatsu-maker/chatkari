@@ -11,31 +11,31 @@ const rules: Array<{ id: PlayCategory; pattern: RegExp; prompt: string; lead: st
     id: "toy",
     pattern: /(バイブ|ディルド|挿入|vibrator|dildo)/i,
     prompt: "vibrator inserted in vagina",
-    lead: "(pink vibrator inserted in pussy:1.4), sex toy insertion, dildo in vagina, spread legs, visible toy",
+    lead: "(vibrator inserted in pussy:1.5), sex toy inside vagina, sitting with legs spread, toy between the legs",
   },
   {
     id: "semen",
     pattern: /(精液|ぶっかけ|顔射|射精|精子|cum|bukkake|facial)/i,
     prompt: "semen on face and body",
-    lead: "(bukkake:1.4), (cum on face:1.3), cum on breasts, thick semen, facial",
+    lead: "(bukkake:1.5), (cum on face:1.4), nude, semen on face and breasts, facial, no bottle, no lotion",
   },
   {
     id: "oral",
     pattern: /(フェラ|口で|oral|fellatio)/i,
     prompt: "fellatio",
-    lead: "(fellatio:1.4), oral sex, penis in mouth, kneeling, looking at viewer, no second face",
+    lead: "(fellatio:1.5), penis in mouth, oral sex, kneeling, normal human tongue, no second face",
   },
   {
     id: "sex",
     pattern: /(セックス|性交|性行為|中出し|sex|intercourse)/i,
     prompt: "vaginal sex",
-    lead: "(vaginal sex:1.4), penis penetration, cowgirl, intercourse, male body out of frame except penis, no second face",
+    lead: "(vaginal sex:1.5), male penis penetrating vagina, cowgirl, woman has no penis, no second face",
   },
   {
     id: "nude",
     pattern: /(全裸|裸にして|裸の写真|ヌード|脱いで|nude|naked)/i,
     prompt: "fully nude",
-    lead: "completely nude, naked, nipples, pussy, no clothes",
+    lead: "completely nude, naked, no panties, no bra, nipples, pussy, bare skin only",
   },
 ];
 
@@ -65,6 +65,17 @@ export function playLeadPrompt(categories: PlayCategory[], appearance = "", age 
 
 export function playUsesPornModel(categories: PlayCategory[]) {
   return categories.some((id) => id !== "lingerie");
+}
+
+export function playNegatives(categories: PlayCategory[]) {
+  const extra: string[] = [];
+  if (categories.includes("toy")) extra.push("vibrator on head, floating toy, extra sex toy, holding toy without insertion");
+  if (categories.includes("semen")) extra.push("lotion bottle, cream bottle, skincare, clothed");
+  if (categories.includes("oral")) extra.push("oversized tongue, tongue shaped like penis, extra mouth");
+  if (categories.includes("sex")) extra.push("futanari, woman with penis, no penetration");
+  if (categories.includes("nude") && !categories.includes("lingerie")) extra.push("panties, bra, underwear, clothes");
+  if (categories.includes("lingerie") && !categories.includes("nude")) extra.push("fully nude");
+  return extra.join(", ");
 }
 
 export function playLoras(_categories: PlayCategory[]) {
