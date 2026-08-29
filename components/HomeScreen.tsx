@@ -115,6 +115,8 @@ export function HomeScreen() {
     setPool(generated);
     setShowAllDefaults(true);
     setPreferencesOpen(false);
+    setMultiSelect(true);
+    setSelectedIds(generated.length >= 2 && generated.length <= MAX_GROUP_SIZE ? generated.map((character) => character.id) : []);
     setPreparation({ done: 0, total: generated.length });
     void prepareProfiles(generated, setPreparation);
   }
@@ -182,7 +184,26 @@ export function HomeScreen() {
           <button type="button" onClick={openSelectedGroup} disabled={selectedIds.length < 1}>{selectedIds.length >= 2 ? "この人数で話す" : "プロフィールを見る"}</button>
         </div>
       )}
-      {preferencesOpen && <MatchPreferences onClose={() => setPreferencesOpen(false)} onGenerated={useGeneratedCharacters} />}
+      {preferencesOpen && (
+        <MatchPreferences
+          pool={pool}
+          onClose={() => setPreferencesOpen(false)}
+          onGenerated={useGeneratedCharacters}
+          onPickGroup={(members) => {
+            setPreferencesOpen(false);
+            setSelectedIds([]);
+            setMultiSelect(false);
+            if (members.length === 1) {
+              const selected = members[0];
+              setImageUrl(localStorage.getItem(`chatkari:image:${selected.id}`) || profileImageFor(selected.id) || undefined);
+              setMatch(selected);
+              return;
+            }
+            setImageUrl(localStorage.getItem(`chatkari:image:${members[0].id}`) || profileImageFor(members[0].id) || undefined);
+            setGroup(members);
+          }}
+        />
+      )}
       <AppTabBar />
     </main>
   );

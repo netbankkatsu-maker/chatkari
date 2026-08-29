@@ -219,6 +219,18 @@ button { cursor: pointer; }
 .preferences-note { margin: 0; color: #91858a; font-size: 10px; line-height: 1.6; }
 .preferences-error { margin: 0; padding: 11px 12px; border-radius: 11px; color: #9f3248; background: #fde6ea; font-size: 12px; }
 .preferences-sheet .primary-button { width: 100%; }
+.preference-picks { display: grid; gap: 9px; }
+.preference-pick-list { display: grid; gap: 7px; max-height: 220px; overflow-y: auto; padding: 2px; }
+.preference-pick-item { min-height: 58px; padding: 7px 10px; display: grid; grid-template-columns: 42px minmax(0, 1fr) 22px; align-items: center; gap: 10px; border: 1px solid #e8dfe2; border-radius: 14px; background: white; text-align: left; }
+.preference-pick-item.is-selected { border-color: #42b969; background: #f3fbf5; box-shadow: 0 0 0 2px #42b9691c; }
+.preference-pick-item .profile-image--small { width: 42px; height: 42px; }
+.preference-pick-item strong { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 13px; }
+.preference-pick-item small { color: var(--muted); font-size: 10px; font-weight: 650; }
+.preference-pick-item em { display: block; margin-top: 3px; color: #8a7f85; font-size: 10px; font-style: normal; }
+.preference-pick-item i { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; color: white; background: #d9d0d3; font-size: 11px; font-style: normal; font-weight: 800; }
+.preference-pick-item.is-selected i { background: var(--line-green); }
+.preference-group-button { width: 100%; min-height: 44px; border: 0; border-radius: 13px; color: white; background: var(--line-green); font-weight: 800; }
+.preference-group-button:disabled { opacity: .4; }
 @media (min-width: 640px) { body { background: #efe8ea; } .home-page { min-height: 100vh; } .page-shell, .chat-page { box-shadow: 0 0 60px #70545d18; } .match-card { margin-top: 28px; } }
 @media (max-height: 650px) { .brand-mark { width: 58px; height: 58px; margin-bottom: 15px; font-size: 32px; } .hero-copy { margin: 14px auto 20px; } }
 @media (max-width: 390px) { .chat-input { grid-template-columns: 40px 40px minmax(0, 1fr) 40px; gap: 5px; padding-inline: 7px; } .chat-input button { width: 40px; height: 40px; } .chat-input .voice-button::before { left: 15px; top: 8px; }.chat-input .voice-button::after { left: 12px; top: 21px; }.chat-voice-preview { grid-template-columns: 10px 1fr 30px; }.chat-voice-preview > div { display: none; }.chat-voice-preview audio { grid-column: 2; } }
