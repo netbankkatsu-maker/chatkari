@@ -60,6 +60,7 @@ export async function generateModelsLabImages(input: {
   referenceImage?: string;
   enableSafetyChecker?: boolean;
   nsfwModel?: boolean;
+  modelId?: string;
   loraModel?: string;
   loraStrength?: string;
 }) {
@@ -68,7 +69,7 @@ export async function generateModelsLabImages(input: {
   const samples = Math.max(1, Math.min(4, Math.round(input.samples)));
   const commonPayload = {
     key,
-    model_id: input.nsfwModel ? NSFW_MODELS[input.style] : MODELS[input.style],
+    model_id: input.modelId || (input.nsfwModel ? NSFW_MODELS[input.style] : MODELS[input.style]),
     prompt: input.style === "anime" ? `high quality detailed anime illustration, ${input.prompt}` : input.prompt,
     negative_prompt: input.negativePrompt,
     enhance_prompt: "no",
@@ -81,7 +82,7 @@ export async function generateModelsLabImages(input: {
     guidance_scale: 8.5,
     clip_skip: 2,
     scheduler: "UniPCMultistepScheduler",
-    ...(input.loraModel ? { lora_model: input.loraModel, lora_strength: input.loraStrength || "0.4" } : {}),
+    ...(input.loraModel ? { lora_model: input.loraModel, lora_strength: input.loraStrength || "0.3" } : {}),
     base64: false,
     temp: false,
     webhook: null,
@@ -108,11 +109,8 @@ export async function generateModelsLabImages(input: {
     try {
       payload = await requestModelsLab("/text2img", commonPayload);
     } catch (error) {
-      if (input.nsfwModel && error instanceof ModelsLabApiError) {
-        payload = await requestModelsLab("/text2img", { ...commonPayload, model_id: "epicrealism" });
-        try {
-          // keep going
-        } catch {}
+      if ((input.nsfwModel || input.modelId) && error instanceof ModelsLabApiError) {
+        payload = await requestModelsLab("/text2img", { ...commonPayload, model_id: "epicrealism", lora_model: null, lora_strength: null });
       } else {
         throw error;
       }
