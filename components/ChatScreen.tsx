@@ -28,6 +28,13 @@ import { chooseImageReference } from "@/lib/image-reference";
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const delay = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
+function typingDelay(text: string, first = false) {
+  const chars = text.replace(/\s/g, "").length;
+  const think = first ? 650 + Math.random() * 900 : 280 + Math.random() * 520;
+  const type = Math.min(3800, 420 + chars * (48 + Math.random() * 28));
+  return Math.round(think + type);
+}
+
 async function toStoredImage(url: string) {
   if (url.startsWith("data:image/")) return url;
   try {
@@ -251,6 +258,7 @@ export function ChatScreen({ character, members }: { character: Character; membe
       setRelationship(updatedRelationship);
       setMemories(updatedMemories);
       setStatus("replying");
+      const waitingSince = Date.now();
 
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -283,10 +291,10 @@ export function ChatScreen({ character, members }: { character: Character; membe
         speakerName: part.speakerName,
       }));
       for (const [index, reply] of replies.entries()) {
-        if (index > 0) {
-          setStatus("replying");
-          await delay(350 + Math.random() * 650);
-        }
+        const wait = typingDelay(reply.content, index === 0);
+        const alreadyWaited = index === 0 ? Date.now() - waitingSince : 0;
+        setStatus("replying");
+        await delay(Math.max(index === 0 ? 480 : 320, wait - alreadyWaited));
         setMessages((current) => [...current, reply]);
       }
 
