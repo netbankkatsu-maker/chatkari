@@ -10,8 +10,9 @@ const personalityHints: Record<string, string[]> = {
   おまかせ: [],
   "明るい・積極的": ["明るい", "積極", "社交", "ノリ", "人懐っこ"],
   "癒やし系・優しい": ["優しい", "癒", "穏やか", "聞き上手", "包容"],
-  "クール・大人っぽい": ["クール", "大人", "しっかり", "知的"],
-  "ツンデレ": ["ツン"],
+  "クール・大人っぽい": ["クール", "大人", "しっかり", "知的", "淡々"],
+  ツンデレ: ["ツン"],
+  "毒舌・批評家": ["毒舌", "批評", "素直じゃない", "昔なじみ"],
   "S気質・主導的": ["S気質", "主導"],
   "M気質・甘えたがり": ["甘え", "M気質"],
   "人見知り・慎重": ["人見知り", "慎重", "おとなしい", "控えめ"],
@@ -91,7 +92,7 @@ export function MatchPreferences({ pool, onClose, onGenerated, onPickGroup }: {
         <header><div><p className="eyebrow">MATCH SETTINGS</p><h2 id="preferences-title">好みから相手を選ぶ</h2></div><button type="button" onClick={onClose} aria-label="閉じる">×</button></header>
         <form onSubmit={submit}>
           <fieldset><legend>年齢層</legend><div className="age-range"><label>最低<input type="number" min={18} max={70} value={ageMin} onChange={(event) => setAgeMin(Number(event.target.value))} /></label><span>〜</span><label>最高<input type="number" min={18} max={75} value={ageMax} onChange={(event) => setAgeMax(Number(event.target.value))} /></label></div></fieldset>
-          <label>性格<select value={personality} onChange={(event) => setPersonality(event.target.value)}><option>おまかせ</option><option>明るい・積極的</option><option>癒やし系・優しい</option><option>クール・大人っぽい</option><option>ツンデレ</option><option>S気質・主導的</option><option>M気質・甘えたがり</option><option>人見知り・慎重</option></select></label>
+          <label>性格<select value={personality} onChange={(event) => setPersonality(event.target.value)}><option>おまかせ</option><option>明るい・積極的</option><option>癒やし系・優しい</option><option>クール・大人っぽい</option><option>ツンデレ</option><option>毒舌・批評家</option><option>S気質・主導的</option><option>M気質・甘えたがり</option><option>人見知り・慎重</option></select></label>
           <label>関係性・距離感<select value={relationshipStyle} onChange={(event) => setRelationshipStyle(event.target.value)}><option>自然に距離を縮めたい</option><option>友達感覚から始めたい</option><option>最初から積極的</option><option>ゆっくり信頼を作りたい</option><option>主導権を握ってほしい</option><option>甘えてほしい</option></select></label>
           <label>好み・性癖（成人同士の範囲）<textarea value={adultPreference} onChange={(event) => setAdultPreference(event.target.value)} maxLength={300} placeholder="例：Sっ気がある、下ネタに寛容、衣装の好みなど" /></label>
           {matches.length > 0 && (

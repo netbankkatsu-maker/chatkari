@@ -12,7 +12,7 @@ import { loadImageSettings } from "@/lib/image-settings";
 import { MAX_GROUP_SIZE } from "@/lib/group";
 
 type Preparation = { done: number; total: number };
-const DEFAULT_MATCH_IDS = ["yukie", "misaki", "mayu", "ayaka", "rena", "chinatsu", "saori", "yui", "mai", "rika"];
+const DEFAULT_MATCH_IDS = ["kirika", "mio", "naoko", "yukie", "misaki", "rena", "rika", "mayu", "mai", "saori"];
 
 function storedGeneratedCharacters() {
   try {

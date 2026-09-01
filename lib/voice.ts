@@ -20,6 +20,9 @@ const fixedVoices: Record<string, CharacterVoiceProfile> = {
   nanako: { voiceId: "liora", speed: 0.88, label: "静かでミステリアスな声", delivery: "calm" },
   rika: { voiceId: "rigel", speed: 0.96, label: "知的で毅然とした声", delivery: "confident" },
   yukie: { voiceId: "ursa", speed: 1.03, label: "温かく明るい岡山寄りの声", delivery: "warm" },
+  kirika: { voiceId: "atlas", speed: 0.97, label: "低く刺さる毒舌の声", delivery: "commanding" },
+  mio: { voiceId: "liora", speed: 0.86, label: "抑揚の少ない淡々とした声", delivery: "calm" },
+  naoko: { voiceId: "rex", speed: 0.98, label: "昔なじみの雑談する声", delivery: "confident" },
 };
 
 const generatedVoicePool = ["carina", "luna", "iris", "altair", "celeste", "aurora", "liora", "sirius", "ursa"];
@@ -35,6 +38,7 @@ export function characterVoiceProfile(character: Character): CharacterVoiceProfi
   if (fixed) return fixed;
 
   const traits = `${character.personality.join(" ")} ${character.speakingStyle} ${character.romanceStyle}`;
+  if (/(毒舌|批評|淡々|折れない|素直じゃない)/.test(traits)) return { voiceId: "atlas", speed: 0.97, label: "刺さる低い声", delivery: "commanding" };
   if (/(S気質|主導権|命令|強気|威圧)/.test(traits)) return { voiceId: "atlas", speed: 0.96, label: "自信のある主導的な声", delivery: "commanding" };
   if (/(人見知り|おとなしい|控えめ|奥手|恥ずかし)/.test(traits)) return { voiceId: "aurora", speed: 0.91, label: "控えめで柔らかな声", delivery: "soft" };
   if (/(穏やか|包容力|癒|優しい|聞き上手)/.test(traits)) return { voiceId: "carina", speed: 0.92, label: "穏やかで温かな声", delivery: "warm" };
