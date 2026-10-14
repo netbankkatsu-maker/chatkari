@@ -7,6 +7,10 @@ import { DEFAULT_IMAGE_SETTINGS, loadImageSettings, type ImageProvider, type Ima
 
 type BillingResult = {
   configured?: boolean;
+  provider?: "venice" | "xai";
+  remainingDiem?: number;
+  bundledCredits?: number;
+  earnedCredits?: number;
   remainingUsd?: number;
   currency?: string;
   updatedAt?: string;
@@ -87,8 +91,7 @@ export function SettingsScreen() {
             <fieldset className="image-setting-group">
               <legend>画像生成サービス</legend>
               <div className="image-option-grid">
-                <label className={imageProvider === "xai" ? "is-selected" : ""}><input type="radio" name="image-provider" value="xai" checked={imageProvider === "xai"} onChange={() => setImageProvider("xai")} /><strong>xAI</strong><small>現在のGrok Imagine</small></label>
-                <label className={imageProvider === "modelslab" ? "is-selected" : ""}><input type="radio" name="image-provider" value="modelslab" checked={imageProvider === "modelslab"} onChange={() => setImageProvider("modelslab")} /><strong>ModelsLab</strong><small>会話連動の画像生成</small></label>
+                <label className={imageProvider === "venice" ? "is-selected" : ""}><input type="radio" name="image-provider" value="venice" checked={imageProvider === "venice"} onChange={() => setImageProvider("venice")} /><strong>Venice AI</strong><small>チャットと画像の接続先</small></label>
               </div>
             </fieldset>
             <fieldset className="image-setting-group">
@@ -99,7 +102,7 @@ export function SettingsScreen() {
               </div>
             </fieldset>
             <div className="image-settings-row">
-              <label>画風<select value={imageStyle} onChange={(event) => setImageStyle(event.target.value as ImageStyle)}><option value="realistic">リアル寄り</option><option value="anime">アニメ寄り</option></select></label>
+              <label>画風<select value={imageStyle} onChange={(event) => setImageStyle(event.target.value as ImageStyle)}><option value="realistic">プロフィールに合わせた写実写真</option></select></label>
               <label>生成枚数<select value={imageSamples} onChange={(event) => setImageSamples(Number(event.target.value))}><option value={1}>1枚（推奨）</option><option value={2}>2枚</option><option value={3}>3枚</option><option value={4}>4枚</option></select></label>
             </div>
           <div className="image-preset-row">
@@ -117,9 +120,9 @@ export function SettingsScreen() {
         <div className="settings-section">
         <div className="settings-heading">
           <span className="settings-icon" aria-hidden="true">$</span>
-          <div><p className="eyebrow">XAI API BILLING</p><h2>APIクレジット</h2></div>
+          <div><p className="eyebrow">API BILLING</p><h2>APIクレジット</h2></div>
         </div>
-        <p className="settings-description">xAIのプリペイドクレジット残高を確認できます。残高情報はアクセスコードで保護されています。</p>
+        <p className="settings-description">利用中のAIサービスのクレジット残高を確認できます。残高情報はアクセスコードで保護されています。</p>
 
         <form className="settings-form" onSubmit={loadBalance}>
           <label htmlFor="settings-code">設定アクセスコード</label>
@@ -139,9 +142,10 @@ export function SettingsScreen() {
 
         {typeof result?.remainingUsd === "number" && (
           <div className="balance-card" aria-live="polite">
-            <span>残りクレジット</span>
+            <span>{result.provider === "venice" ? "Venice USD残高" : "残りクレジット"}</span>
             <strong>${result.remainingUsd.toFixed(2)}</strong>
             <small>USD・{result.updatedAt ? new Date(result.updatedAt).toLocaleString("ja-JP") : "現在"} 時点</small>
+            {result.provider === "venice" && <small>DIEM: {result.remainingDiem?.toFixed(2) ?? "—"} ・付属クレジット: {result.bundledCredits?.toFixed(2) ?? "—"} ・獲得クレジット: {result.earnedCredits?.toFixed(2) ?? "—"}</small>}
             <button onClick={() => loadBalance()} disabled={loading}>残高を更新</button>
           </div>
         )}
@@ -150,8 +154,8 @@ export function SettingsScreen() {
 
         <div className="settings-note">
           <h2>クレジットについて</h2>
-          <p>チャットとボイスはxAI、画像は設定で選んだサービスのクレジットから差し引かれます。生成枚数を増やすと画像料金も枚数に応じて増えます。</p>
-          <a href="https://console.x.ai/" target="_blank" rel="noreferrer">xAI Consoleで詳細を見る ↗</a>
+          <p>チャットと画像生成はVenice AIを利用します。ボイス機能には別途xAIのAPI設定が必要です。生成枚数を増やすと画像料金も枚数に応じて増えます。</p>
+          <a href="https://venice.ai/settings/api" target="_blank" rel="noreferrer">Venice AIで詳細を見る ↗</a>
         </div>
         </div>
       </section>

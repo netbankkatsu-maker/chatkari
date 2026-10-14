@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { characters, sanitizeCharacter, type Character } from "@/data/characters";
+import { CharacterEditor } from "@/components/CharacterEditor";
+import { loadCharacterDirectory, saveDirectoryCharacter, deleteDirectoryCharacter, restoreDirectoryCharacter, deletedCharacterIds } from "@/lib/character-store";
 import { AppTabBar } from "@/components/AppTabBar";
 import { CharacterProfile } from "@/components/CharacterProfile";
 import { GroupProfile } from "@/components/GroupProfile";
@@ -12,7 +14,7 @@ import { loadImageSettings } from "@/lib/image-settings";
 import { MAX_GROUP_SIZE } from "@/lib/group";
 
 type Preparation = { done: number; total: number };
-const DEFAULT_MATCH_IDS = ["kirika", "mio", "naoko", "yukie", "misaki", "rena", "rika", "mayu", "mai", "saori"];
+const DEFAULT_MATCH_IDS = ["kirika", "mio", "naoko", "ayaka", "misaki", "rena", "rika", "mayu", "mai", "saori"];
 
 function storedGeneratedCharacters() {
   try {
@@ -66,14 +68,18 @@ export function HomeScreen() {
   const [multiSelect, setMultiSelect] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const [showAllDefaults, setShowAllDefaults] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(10);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState<Character | null | undefined>();
+  const [deleteTarget, setDeleteTarget] = useState<Character>();
+  const [deleted, setDeleted] = useState<Character>();
+  const [directoryError, setDirectoryError] = useState("");
   const [storageReady, setStorageReady] = useState(false);
   const [preparation, setPreparation] = useState<Preparation>({ done: 0, total: characters.length });
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      const generated = storedGeneratedCharacters();
-      const active = generated.length ? generated : characters;
+      const active = loadCharacterDirectory();
       setPool(active);
       setStorageReady(true);
       void prepareProfiles(active, setPreparation);
@@ -111,9 +117,10 @@ export function HomeScreen() {
   }
 
   function useGeneratedCharacters(generated: Character[]) {
-    localStorage.setItem("chatkari:generated-characters", JSON.stringify(generated));
-    setPool(generated);
-    setShowAllDefaults(true);
+    const accumulated = [...new Map([...storedGeneratedCharacters(), ...generated].map((character) => [character.id, character])).values()];
+    localStorage.setItem("chatkari:generated-characters", JSON.stringify(accumulated));
+    setPool(loadCharacterDirectory());
+    setVisibleCount((current) => current + generated.length);
     setPreferencesOpen(false);
     setMultiSelect(true);
     setSelectedIds(generated.length >= 2 && generated.length <= MAX_GROUP_SIZE ? generated.map((character) => character.id) : []);
@@ -121,19 +128,39 @@ export function HomeScreen() {
     void prepareProfiles(generated, setPreparation);
   }
 
-  function useDefaultCharacters() {
-    localStorage.removeItem("chatkari:generated-characters");
-    setPool(characters);
-    setShowAllDefaults(false);
-    setPreparation({ done: 0, total: characters.length });
-    void prepareProfiles(characters, setPreparation);
-  }
-
   const profilesReady = preparation.total > 0 && preparation.done >= preparation.total;
-  const generatedPool = pool.some((character) => character.id.startsWith("custom-"));
   const orderedDefaults = DEFAULT_MATCH_IDS.flatMap((id) => pool.find((character) => character.id === id) || []);
-  const remainingDefaults = pool.filter((character) => !DEFAULT_MATCH_IDS.includes(character.id));
-  const visiblePool = generatedPool ? pool.slice(0, 10) : showAllDefaults ? [...orderedDefaults, ...remainingDefaults] : orderedDefaults;
+  const remaining = pool.filter((character) => !DEFAULT_MATCH_IDS.includes(character.id));
+  const visiblePool = [...orderedDefaults, ...remaining].slice(0, visibleCount);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || match || group || visibleCount >= pool.length) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) setVisibleCount((current) => Math.min(pool.length, current + 10));
+    }, { rootMargin: "200px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [visibleCount, pool.length, match, group]);
+
+  function saveCharacter(next: Character) {
+    const saved = saveDirectoryCharacter(next);
+    setPool(loadCharacterDirectory());
+    setVisibleCount((current) => Math.max(current, loadCharacterDirectory().length));
+    if (match?.id === saved.id) setMatch(saved);
+    setEditing(undefined);
+  }
+  function deleteCharacter(target: Character) {
+    try {
+      deleteDirectoryCharacter(target.id);
+      setPool(loadCharacterDirectory());
+      setSelectedIds((current) => current.filter((id) => id !== target.id));
+      setMatch(undefined); setDeleteTarget(undefined); setDeleted(target);
+    } catch { setDirectoryError("削除を保存できませんでした。"); }
+  }
+  const removedCharacters = storageReady ? loadCharacterDirectory(true).filter((character) => deletedCharacterIds().includes(character.id)) : [];
+  const editor = editing !== undefined ? <CharacterEditor character={editing || undefined} onSave={saveCharacter} onClose={() => setEditing(undefined)} /> : null;
+  const deleteDialog = deleteTarget ? <div className="preferences-overlay"><section className="preferences-sheet" role="dialog" aria-modal="true" aria-labelledby="delete-character-title"><h2 id="delete-character-title">{deleteTarget.name}を一覧から削除しますか？</h2><p>会話の履歴は保存されます。削除後に元に戻せます。</p><button className="secondary-button" onClick={() => deleteCharacter(deleteTarget)}>一覧から削除する</button><button className="text-button" onClick={() => setDeleteTarget(undefined)}>キャンセル</button>{directoryError && <p role="alert">{directoryError}</p>}</section></div> : null;
 
   if (group?.length) {
     const memberImages = Object.fromEntries(group.map((member) => [member.id, localStorage.getItem(`chatkari:image:${member.id}`) || profileImageFor(member.id) || undefined]));
@@ -144,8 +171,10 @@ export function HomeScreen() {
     return (
       <main className="page-shell match-page">
         <header className="compact-header"><button className="text-button" onClick={() => setMatch(undefined)}>‹ 戻る</button><span>マッチしました</span><span /></header>
+        <div className="character-manage-actions"><button onClick={() => setEditing(match)}>編集</button><button onClick={() => setDeleteTarget(match)}>削除</button></div>
         <CharacterProfile character={match} imageUrl={imageUrl} generating={!imageUrl && !profilesReady} />
         <button className="secondary-button" onClick={() => setMatch(undefined)}>一覧に戻る</button>
+        {editor}{deleteDialog}
       </main>
     );
   }
@@ -159,6 +188,7 @@ export function HomeScreen() {
           <div className="directory-actions">
             <button type="button" className={multiSelect ? "is-active" : undefined} onClick={() => { setMultiSelect((current) => !current); setSelectedIds([]); }}>{multiSelect ? "1人に戻す" : "複数人"}</button>
             <button type="button" onClick={() => setPreferencesOpen(true)}>絞り込み</button>
+            <button type="button" onClick={() => setEditing(null)}>追加</button>
           </div>
         </header>
         {!profilesReady && <p className="directory-progress">プロフィール写真を準備中 {preparation.done}/{preparation.total}</p>}
@@ -174,8 +204,10 @@ export function HomeScreen() {
             );
           })}
         </div>
-        {!generatedPool && remainingDefaults.length > 0 && <button className="show-more-matches" type="button" onClick={() => setShowAllDefaults((current) => !current)}>{showAllDefaults ? "10人表示に戻す" : `ほか${remainingDefaults.length}人も見る`}</button>}
-        {generatedPool && <button className="default-pool-button" type="button" onClick={useDefaultCharacters}>デフォルトの10人に戻す</button>}
+        <div ref={loadMoreRef} className="directory-load-more">{visibleCount < pool.length ? "スクロールすると続きを表示します" : "すべてのキャラクターを表示しました"}</div>
+        {deleted && <p role="status">{deleted.name}を削除しました。<button onClick={() => { try { restoreDirectoryCharacter(deleted.id); setPool(loadCharacterDirectory()); setDeleted(undefined); } catch { setDirectoryError("復元できませんでした。"); } }}>元に戻す</button></p>}
+        {removedCharacters.length > 0 && <details className="character-wardrobe"><summary>削除したキャラクター（{removedCharacters.length}人）</summary>{removedCharacters.map((character) => <p key={character.id}>{character.name}<button onClick={() => { try { restoreDirectoryCharacter(character.id); setPool(loadCharacterDirectory()); setDeleted(undefined); } catch { setDirectoryError("復元できませんでした。"); } }}>{character.name}を復元</button></p>)}</details>}
+        {directoryError && <p role="alert">{directoryError}</p>}
         <p className="safety-note"><span>AI</span> 登場する人物はすべて18歳以上の架空キャラクターです</p>
       </section>
       {multiSelect && selectedIds.length > 0 && (
@@ -204,6 +236,7 @@ export function HomeScreen() {
           }}
         />
       )}
+      {editor}{deleteDialog}
       <AppTabBar />
     </main>
   );

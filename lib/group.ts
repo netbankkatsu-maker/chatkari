@@ -1,4 +1,5 @@
-import { characters, sanitizeCharacter, type Character } from "@/data/characters";
+import { loadCharacterDirectory, deletedCharacterIds } from "@/lib/character-store";
+import { sanitizeCharacter, type Character } from "@/data/characters";
 
 export const MAX_GROUP_SIZE = 4;
 
@@ -30,14 +31,7 @@ export function groupSubtitle(members: Character[]) {
 }
 
 export function allKnownCharacters() {
-  let generated: Character[] = [];
-  try {
-    generated = (JSON.parse(localStorage.getItem("chatkari:generated-characters") || "[]") as unknown[]).flatMap((item) => {
-      const character = sanitizeCharacter(item);
-      return character ? [character] : [];
-    });
-  } catch { /* Ignore corrupt generated profiles. */ }
-  return [...characters, ...generated].filter((character, index, list) => list.findIndex((item) => item.id === character.id) === index);
+  return loadCharacterDirectory();
 }
 
 export function rememberedGroupIds() {
@@ -63,7 +57,8 @@ export function snapshotMembers(roomId: string) {
 
 export function resolveLocalCharacters(ids: string[], roomId?: string) {
   const snapshots = [...(roomId ? snapshotMembers(roomId) : []), ...rememberedGroupIds().flatMap(snapshotMembers)];
-  const pool = [...snapshots, ...allKnownCharacters()].filter((character, index, list) => list.findIndex((item) => item.id === character.id) === index);
+  const deleted = new Set(deletedCharacterIds());
+  const pool = [...allKnownCharacters(), ...snapshots.filter((member) => !deleted.has(member.id))].filter((character, index, list) => list.findIndex((item) => item.id === character.id) === index);
   return ids.flatMap((id) => pool.find((character) => character.id === id) || []);
 }
 

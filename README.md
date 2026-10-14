@@ -1,6 +1,6 @@
 # Chatkari
 
-架空の成人女性AIキャラクター12人からランダムにマッチし、xAI Grokと1対1で会話できるスマートフォン向けPWAです。写真を求める会話ではGrok Imagineが同じキャラクターの外見を参照しながら画像を生成します。
+架空の成人AIキャラクターとランダムにマッチし、Venice AIで会話・画像生成ができるスマートフォン向けPWAです。画像生成はVenice AIに統一しています。ボイス機能は別途xAIの設定が必要です。
 
 ## 主な機能
 
@@ -8,7 +8,7 @@
 - 固定設定を維持する短文チャットと簡易好感度
 - 直近30件に制限した会話コンテキスト
 - 文脈を考慮した写真要求判定、曖昧な依頼への聞き返し、テキスト返信＋画像生成
-- xAI／ModelsLabの画像生成切り替え、リアル／アニメ切り替え、1〜4枚生成
+- Venice AIによる画像生成、リアル／アニメ切り替え、1〜4枚生成
 - 直前10件の会話から場面を再構成し、会話内の最新画像を優先参照する画像生成・画像変更
 - JPEG・PNG・WebPの画像添付と、画像を見たキャラクター別リアクション
 - 性格に応じた画像要求（お願い・命令・要求しない）の出し分け
@@ -21,35 +21,27 @@
 - iPhone Safe Area、Android、PC対応
 - manifest、standalone表示、Service Workerを含むPWA
 - APIキーをサーバー側だけで使うRoute Handler
-- アクセスコードで保護されたxAIプリペイドクレジット残高表示
+- アクセスコードで保護されたVeniceのUSD・DIEM・付属／獲得クレジット残高表示
 
 チャット履歴、好感度、生成済みプロフィール画像はブラウザの `localStorage`、ボイスメッセージ本体は `IndexedDB` に保存します。API処理と表示処理は分離してあるため、将来Supabaseの `users`、`characters`、`matches`、`messages`、`generated_images` へ移行できます。
 
 ## ローカル起動
 
-1. [xAI Console](https://console.x.ai/)でアカウントを作成し、APIキーを取得します。
-2. このプロジェクトをダウンロードします。
-3. `npm install` を実行します。
-4. `.env.example` を `.env.local` としてコピーします。
-5. `.env.local` の `XAI_API_KEY` に取得したキーを設定します。
-6. `npm run dev` を実行し、表示されたURLを開きます。
+1. [Venice AI](https://venice.ai/settings/api)でAPIキーを取得します。
+2. `npm install` を実行します。
+3. `.env.example` を `.env.local` としてコピーします。
+4. `VENICE_API_KEY` にキー、`SETTINGS_ACCESS_CODE` に残高確認用の長いアクセスコードを設定します。
+5. `npm run dev` を実行し、表示されたURLを開きます。
 
-```env
-XAI_API_KEY=xai-your-api-key
-MODELSLAB_API_KEY=your-modelslab-api-key
-XAI_MANAGEMENT_API_KEY=xai-your-management-api-key
-SETTINGS_ACCESS_CODE=choose-a-long-private-code
-```
+画像の既定モデルは `krea-v2-medium` です。変更する場合は `VENICE_IMAGE_MODEL` を設定してください。モデルごとに参照画像の対応状況が異なり、参照を使わず生成した場合はAPIの `referenceUsed` が `false` になります。
 
-APIキーを `NEXT_PUBLIC_` で始まる変数へ入れないでください。`.env.local` は `.gitignore` の対象です。
-
-残高表示には通常の推論キーとは別に、xAI Consoleの **Settings → Management Keys** で発行したManagement API keyが必要です。Billingの読み取り権限を付与し、`XAI_MANAGEMENT_API_KEY` に設定してください。`SETTINGS_ACCESS_CODE` は公開サイトで残高を保護するための任意の長いアクセスコードです。
+キーを `NEXT_PUBLIC_` 変数に入れないでください。`.env.local` はGitの対象外です。キーを変更したら開発サーバーを再起動してください。ボイス機能のみ `XAI_API_KEY` が必要です。
 
 ## Vercelへデプロイ
 
 1. プロジェクトをGitHubへPushします。
 2. Vercelで **Add New → Project** からリポジトリをImportします。
-3. Project SettingsのEnvironment Variablesへ `XAI_API_KEY` と `MODELSLAB_API_KEY` を登録します。
+3. Project SettingsのEnvironment Variablesへ `.env.example` のVenice用変数とアクセスコードを登録します。APIキーはSecretとして保存します。
 4. Deployを実行します。
 
 追加のビルド設定は不要です。`npm run build` がそのまま使えます。
@@ -60,11 +52,14 @@ APIキーを `NEXT_PUBLIC_` で始まる変数へ入れないでください。`
 
 ## モデル設定
 
-モデル名は `lib/xai.ts` と `lib/modelslab.ts` に集約しています。現在の既定値は次のとおりです。
+- チャット: `VENICE_CHAT_MODEL`（既定: `z-ai-glm-5-3-flash`）
+- 画像: `VENICE_IMAGE_MODEL`（既定: `krea-v2-medium`）
+- 残高確認: `BILLING_PROVIDER=venice`
 
-- Chat: `grok-4.20-non-reasoning`
-- Image: `grok-imagine-image-2.0`
-- ModelsLab realistic: `realistic-vision-51`
-- ModelsLab anime: `anything-v3`
+画像生成にはVeniceのクレジットを使います。USDとDIEMは別々に表示し、合算しません。
 
-モデル提供状況が変わった場合はこの2定数だけを更新してください。画像生成にはxAIの利用料金が発生します。
+会話では最新の訂正を優先し、一対一の連続した吹き出しを一つの発言として履歴に渡します。明らかな外国語混入・反復・内部タグが出た時だけ、同じ会話から一度再生成します。GLM 5.3 Flashは推論専用なので推論を有効にしたまま、思考過程は本文に表示しません。
+
+返答は表示前に会話との整合性も確認します。ユーザーの予定をキャラクターとの約束に取り違えたり、最後の質問に答えていない場合は、キャラクターの口調を保って修正します。固定プロフィール、設定した呼び名、記憶も確認に渡します。
+
+通常の会話写真は写実に統一し、人物のプロフィール写真がある場合はVeniceの画像編集API（`VENICE_IMAGE_EDIT_MODEL`、既定`qwen-image-2-edit`）、ない場合は画像生成API（`VENICE_IMAGE_MODEL`）を使います。会話文は視覚的な場面へ整理し、字幕として渡しません。黒い画像やサービス側でぼかされた画像は成功扱いせず、課金される再試行は自動実行しません。

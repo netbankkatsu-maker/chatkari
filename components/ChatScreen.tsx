@@ -268,7 +268,7 @@ export function ChatScreen({ character, members }: { character: Character; membe
           character,
           members: grouped ? party : undefined,
           userDisplayName,
-          messages: nextMessages.slice(grouped ? -48 : -30).map((message) => {
+          messages: nextMessages.slice(-60).map((message) => {
             if (message.role === "assistant" && message.imageUrl) {
               return { ...message, content: message.content?.trim() || "（写真を送った）", imageUrl: undefined };
             }

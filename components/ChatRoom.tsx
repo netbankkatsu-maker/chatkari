@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChatScreen } from "@/components/ChatScreen";
-import { sanitizeCharacter, type Character } from "@/data/characters";
+import { type Character } from "@/data/characters";
 import { isGroupRoom, memberIdsFromRoomId, rememberGroup, resolveLocalCharacters } from "@/lib/group";
 
 export function ChatRoom({ characterId, staticCharacter }: { characterId: string; staticCharacter?: Character }) {
-  const grouped = isGroupRoom(characterId);
-  const [character, setCharacter] = useState<Character | null | undefined>(grouped ? undefined : staticCharacter);
-  const [members, setMembers] = useState<Character[] | undefined>(grouped ? undefined : staticCharacter ? [staticCharacter] : undefined);
+  const [character, setCharacter] = useState<Character | null | undefined>(undefined);
+  const [members, setMembers] = useState<Character[] | undefined>(undefined);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -25,20 +24,9 @@ export function ChatRoom({ characterId, staticCharacter }: { characterId: string
         }
         return;
       }
-      if (staticCharacter) {
-        setMembers([staticCharacter]);
-        setCharacter(staticCharacter);
-        return;
-      }
-      try {
-        const stored = JSON.parse(localStorage.getItem("chatkari:generated-characters") || "[]") as unknown[];
-        const found = stored.map(sanitizeCharacter).find((item) => item?.id === characterId);
-        setCharacter(found || null);
-        setMembers(found ? [found] : []);
-      } catch {
-        setCharacter(null);
-        setMembers([]);
-      }
+      const found = resolveLocalCharacters([characterId])[0];
+      setCharacter(found || null);
+      setMembers(found ? [found] : []);
     });
     return () => cancelAnimationFrame(frame);
   }, [characterId, staticCharacter]);

@@ -51,7 +51,7 @@ function topicFrom(text: string) {
   if (/(料理|ご飯|食べ|飲み)/.test(text)) return "食事";
   if (/(家族|友達|子ども|子供|夫|妻)/.test(text)) return "身近な人";
   if (/(疲れ|しんど|つら|悲し|悩)/.test(text)) return "気分・悩み";
-  if (/(好き|会いたい|かわいい|エロ|下着)/.test(text)) return "親密な話";
+  if (/(会いたい|エロ|下着|キス|付き合いたい)/.test(text)) return "親密な話";
   return text.trim().slice(0, 18) || "日常";
 }
 
@@ -59,7 +59,7 @@ export function advanceRelationship(current: RelationshipState, text: string) {
   const positive = /(好き|かわいい|素敵|楽しい|ありがとう|会いたい|嬉しい)/.test(text);
   const hostile = /(嫌い|うざ|消えろ|ばか|黙れ)/.test(text);
   const vulnerable = /(疲れ|しんど|つら|悲し|悩ん|不安)/.test(text);
-  const intimate = /(好き|会いたい|エロ|下着|キス|抱き)/.test(text);
+  const intimate = /(会いたい|エロ|下着|キス|抱き)/.test(text);
   const turnCount = current.turnCount + 1;
   return {
     affection: clamp(current.affection + (hostile ? -5 : positive ? 4 : 1)),
@@ -86,7 +86,10 @@ function memoryCategory(text: string): ConversationMemory["category"] | undefine
 
 export function rememberFromMessage(existing: ConversationMemory[], text: string) {
   const now = Date.now();
-  const candidates = text.split(/[。！？!?\n]+/).map((part) => part.trim()).filter((part) => part.length >= 3 && part.length <= 100);
+  const candidates = (text.match(/[^。！？!?\n]+[。！？!?]?/g) || [])
+    .filter((part) => !/[？?]$/.test(part.trim()))
+    .map((part) => part.replace(/[。！!]$/, "").trim())
+    .filter((part) => part.length >= 3 && part.length <= 100);
   const additions = candidates.flatMap((content) => {
     const category = memoryCategory(content);
     return category ? [{ category, content, createdAt: now, lastUsedAt: now } satisfies ConversationMemory] : [];

@@ -120,9 +120,9 @@ export function buildOptimizedImageRequest(input: {
     `clothing: ${clothingLine}`,
     `pose: ${poseLine}`,
     `place: ${placeLine}`,
-    "anatomy: exactly one woman, one head, one face, two eyes, two arms, two hands, two legs, two breasts only, navel in the center, normal human proportions",
+    clothingMode === "clothed" ? "natural human proportions, one person" : "anatomy: exactly one woman, one head, one face, two eyes, two arms, two hands, two legs, two breasts only, navel in the center, normal human proportions",
     "[PRIORITY]",
-    "If the user named a sex act, clothing or toy, follow the user. If the user only asked for a photo, follow the character's last clothing and pose description.",
+    clothingMode === "clothed" ? "Follow the requested everyday scene and clothing. Use the conversation only for relevant visual details." : "If the user named a sex act, clothing or toy, follow the user. If the user only asked for a photo, follow the character's last clothing and pose description.",
     "[CONTENT BOUNDARY]",
     contentBoundary,
   ].filter(Boolean).join("\n");

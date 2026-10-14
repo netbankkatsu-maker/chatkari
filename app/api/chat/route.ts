@@ -14,7 +14,8 @@ import {
 } from "@/lib/chat";
 import { sanitizeMemories, sanitizeRelationship } from "@/lib/conversation";
 import type { ChatMessageData } from "@/lib/types";
-import { CHAT_MODEL, publicApiError, xaiFetch } from "@/lib/xai";
+import { CHAT_MODEL, chatFetch, publicChatError as publicApiError } from "@/lib/llm";
+import { chatReplyIssue, cleanSingleSpeakerReply, compactAssistantTurns, conversationReviewMessages, CONVERSATION_REVIEW_SCHEMA } from "@/lib/chat-quality";
 
 type ChatCompletion = { choices?: Array<{ finish_reason?: string; message?: { content?: string } }> };
 
@@ -60,19 +61,20 @@ export async function POST(request: Request) {
       return Response.json({ error: `メッセージは1〜${MAX_MESSAGE_CHARACTERS}文字で入力してください。` }, { status: 400 });
     }
 
-    const messages = Array.isArray(body.messages)
+    const rawMessages = Array.isArray(body.messages)
       ? body.messages.flatMap((message) => {
         if ((message.role !== "user" && message.role !== "assistant") || typeof message.content !== "string") return [];
         return [{
           role: message.role,
-          content: message.role === "assistant" && message.speakerName
+          content: grouped && message.role === "assistant" && message.speakerName
             ? `${message.speakerName}: ${message.content.slice(0, MAX_MESSAGE_CHARACTERS)}`
             : message.content.slice(0, MAX_MESSAGE_CHARACTERS),
           imageUrl: message.role === "user" ? safeUserImage(message.imageUrl) : undefined,
           speakerId: typeof message.speakerId === "string" ? message.speakerId : undefined,
         }];
-      }).slice(-historyLimit)
+      }).slice(-60)
       : [];
+    const messages = (grouped ? rawMessages : compactAssistantTurns(rawMessages)).slice(-historyLimit);
     const latestUserMessage = [...messages].reverse().find((message) => message.role === "user");
     const latestUser = latestUserMessage?.content.trim() || (latestUserMessage?.imageUrl ? "画像を送ったよ" : "");
     if (!latestUser) {
@@ -88,13 +90,7 @@ export async function POST(request: Request) {
     const recentAssistant = messages.filter((message) => message.role === "assistant").slice(-Math.max(3, party.length));
     const avoidQuestion = recentAssistant.filter((message) => /[？?]/.test(message.content)).length >= 2;
     const asksForDetail = /(詳しく|理由|どうして|説明して|相談|どう思う|教えて)/.test(latestUser);
-    const replyLength = grouped
-      ? "medium"
-      : asksForDetail
-        ? "long"
-        : latestUser.length <= 28
-          ? (Math.random() < 0.38 ? "short" : Math.random() < 0.86 ? "medium" : "long")
-          : "medium";
+    const replyLength = grouped ? "medium" : asksForDetail ? "long" : latestUser.length <= 12 ? "short" : "medium";
     const quietNames = grouped
       ? quietMemberNames(party, messages.filter((message) => message.role === "assistant" && message.speakerId).map((message) => message.speakerId as string).slice(-party.length * 4))
       : [];
@@ -131,18 +127,42 @@ export async function POST(request: Request) {
     const maxTokens = grouped
       ? Math.min(1100, 220 * party.length + 80)
       : replyLength === "short" ? 180 : replyLength === "long" ? 700 : 420;
-    const result = await xaiFetch<ChatCompletion>("/chat/completions", {
+    const deadline = Date.now() + 50_000;
+    const fetchCompletion = (payload: unknown, maxWait = 30_000) => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error("Chat response deadline exceeded");
+      return chatFetch<ChatCompletion>("/chat/completions", payload, Math.min(maxWait, remaining));
+    };
+    const result = await fetchCompletion({
       model: CHAT_MODEL,
       messages: completionMessages,
       store: false,
-      temperature: grouped ? 0.82 : 0.9,
+      temperature: 0.55,
       max_tokens: maxTokens,
-    }, 30_000);
-    const firstChoice = result.choices?.[0];
+    });
+    let firstChoice = result.choices?.[0];
     let reply = firstChoice?.message?.content?.trim();
     if (!reply) throw new Error("Missing assistant message");
+    if (!grouped) reply = cleanSingleSpeakerReply(reply, character.name);
+    const issue = chatReplyIssue(reply, latestUser);
+    if (issue) {
+      const repaired = await fetchCompletion({
+        model: CHAT_MODEL,
+        messages: [
+          { role: "system", content: `${system}\n\n前回の生成に「${issue}」がありました。最後のユーザー発言に直接答える短い自然な日本語の返事を作り直してください。不自然な文字や反復を含めず、修正の説明は書きません。` },
+          ...completionMessages.slice(1),
+        ],
+        store: false,
+        temperature: 0.3,
+        max_tokens: maxTokens,
+      }, 20_000);
+      firstChoice = repaired.choices?.[0];
+      reply = firstChoice?.message?.content?.trim() || "";
+      if (!grouped) reply = cleanSingleSpeakerReply(reply, character.name);
+      if (chatReplyIssue(reply, latestUser)) throw new Error("Malformed chat reply");
+    }
     if (firstChoice?.finish_reason === "length") {
-      const continuationResult = await xaiFetch<ChatCompletion>("/chat/completions", {
+      const continuationResult = await fetchCompletion({
         model: CHAT_MODEL,
         messages: [
           ...completionMessages,
@@ -152,12 +172,14 @@ export async function POST(request: Request) {
             : "直前の返答が途中で切れました。内容を繰り返さず、途切れた箇所の直後から自然に続け、文章を完結させてください。" },
         ],
         store: false,
-        temperature: 0.75,
+        temperature: 0.4,
         max_tokens: grouped ? Math.min(700, 180 * party.length) : 700,
-      }, 30_000);
-      const continuation = continuationResult.choices?.[0]?.message?.content?.trim();
+      }, 20_000);
+      const rawContinuation = continuationResult.choices?.[0]?.message?.content?.trim();
+      const continuation = rawContinuation && !grouped ? cleanSingleSpeakerReply(rawContinuation, character.name) : rawContinuation;
       if (continuation) reply += `\n${continuation}`;
     }
+    if (chatReplyIssue(reply, latestUser)) throw new Error("Malformed chat reply");
 
     const photoSpeaker = speakerForPhoto(latestUser, party, [...(body.messages || [])].reverse().find((message) => message?.role === "assistant" && typeof message.speakerId === "string")?.speakerId);
     const blocksRejectedImage = (photoSpeaker || character).adultTopicPolicy === "reject" && isAdultTopic(latestUser);
@@ -168,7 +190,7 @@ export async function POST(request: Request) {
       const missing = missingGroupMembers(replyParts, party);
       if (missing.length) {
         try {
-          const fillResult = await xaiFetch<ChatCompletion>("/chat/completions", {
+          const fillResult = await fetchCompletion({
             model: CHAT_MODEL,
             messages: [
               ...completionMessages,
@@ -176,15 +198,44 @@ export async function POST(request: Request) {
               { role: "user", content: fillPromptForMissing(missing, replyParts) },
             ],
             store: false,
-            temperature: 0.8,
+            temperature: 0.5,
             max_tokens: Math.min(500, 140 * missing.length + 60),
           }, 20_000);
           const fill = fillResult.choices?.[0]?.message?.content?.trim();
-          if (fill) replyParts = mergeGroupParts(replyParts, parseGroupReply(fill, party), party);
+          if (fill && !chatReplyIssue(fill, latestUser)) replyParts = mergeGroupParts(replyParts, parseGroupReply(fill, party), party);
         } catch {
           /* Keep the speakers we already have if the fill-in call fails. */
         }
       }
+      reply = replyParts.map((part) => `${part.speakerName}: ${part.content}`).join("\n");
+    }
+    const reviewResult = await fetchCompletion({
+      model: CHAT_MODEL,
+      messages: conversationReviewMessages({
+        characters: party.map((member) => ({ name: member.name, speakingStyle: member.speakingStyle, age: member.age, job: member.job })),
+        userDisplayName,
+        knownUserFacts: memories.map((memory) => memory.content),
+        messages: messages.map((message) => ({ role: message.role, content: message.content })),
+        latestUser,
+        reply,
+      }),
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "conversation_review", strict: true, schema: CONVERSATION_REVIEW_SCHEMA },
+      },
+      store: false,
+      temperature: 0.2,
+      max_tokens: grouped ? 1300 : 800,
+    }, 20_000);
+    const review = JSON.parse(reviewResult.choices?.[0]?.message?.content || "") as { needsCorrection?: unknown; correctedReply?: unknown };
+    if (typeof review.needsCorrection !== "boolean" || typeof review.correctedReply !== "string") throw new Error("Invalid conversation review");
+    if (review.needsCorrection) {
+      reply = grouped ? review.correctedReply.trim() : cleanSingleSpeakerReply(review.correctedReply, character.name);
+      if (chatReplyIssue(reply, latestUser)) throw new Error("Malformed corrected reply");
+      replyParts = grouped
+        ? parseGroupReply(reply, party)
+        : splitNaturalReply(reply).map((content) => ({ content, speakerId: character.id, speakerName: character.name }));
+      if (grouped && missingGroupMembers(replyParts, party).length) throw new Error("Missing corrected group speaker");
     }
     return Response.json({
       reply,
@@ -199,7 +250,7 @@ export async function POST(request: Request) {
   }
 }
 
-export function splitNaturalReply(reply: string, random = Math.random) {
+function splitNaturalReply(reply: string, random = Math.random) {
   const paragraphs = reply.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
   if (paragraphs.length >= 2 && paragraphs.length <= 3 && paragraphs.every((part) => part.length <= 180)) return paragraphs;
   if (random() > 0.28 || reply.length < 45 || reply.length > 360) return [reply];

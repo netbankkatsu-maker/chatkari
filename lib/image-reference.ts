@@ -22,5 +22,6 @@ export function chooseImageReference(input: {
     const referenceImage = input.attachedImage || input.conversationImage;
     if (referenceImage) return { referenceImage, referenceSource: "conversation" as const };
   }
+  if (input.profileImage) return { referenceImage: input.profileImage, referenceSource: "profile" as const };
   return { referenceImage: undefined, referenceSource: "none" as const };
 }

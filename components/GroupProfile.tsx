@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Character } from "@/data/characters";
+import { CharacterWardrobe } from "@/components/CharacterWardrobe";
 import { ProfileImage } from "@/components/ProfileImage";
 import { groupIdFromMembers, groupSubtitle, groupTitle, rememberGroup } from "@/lib/group";
 import { characterVoiceProfile } from "@/lib/voice";
@@ -63,6 +64,7 @@ export function GroupProfile({ members, imageUrl, memberImages = {}, onBack }: {
               <p>{member.introduction}</p>
               <span>{member.personality.slice(0, 3).join("・")}</span>
               <em>{characterVoiceProfile(member).label}</em>
+              <CharacterWardrobe character={member} />
             </div>
           </article>
         ))}

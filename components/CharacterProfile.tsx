@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Character } from "@/data/characters";
+import { CharacterWardrobe } from "@/components/CharacterWardrobe";
 import { ProfileImage } from "@/components/ProfileImage";
 import { characterVoiceProfile } from "@/lib/voice";
 
@@ -23,6 +24,7 @@ export function CharacterProfile({ character, imageUrl, generating }: { characte
           <div><dt>趣味</dt><dd>{character.hobbies.join("・")}</dd></div>
           <div><dt>声</dt><dd>{characterVoiceProfile(character).label}</dd></div>
         </dl>
+        <CharacterWardrobe character={character} />
         <Link className="primary-button" href={`/chat/${character.id}`}>チャットを始める</Link>
       </div>
     </article>

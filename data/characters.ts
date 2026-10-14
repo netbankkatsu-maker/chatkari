@@ -1,3 +1,5 @@
+import { sanitizeWardrobe, type Wardrobe } from "@/lib/wardrobe";
+
 export type Character = {
   id: string;
   name: string;
@@ -11,6 +13,7 @@ export type Character = {
   speakingStyle: string;
   appearance: string;
   fashion: string;
+  wardrobe?: Wardrobe;
   firstMessage: string;
   imagePrompt: string;
   accent: string;
@@ -155,21 +158,6 @@ export const characters: Character[] = [
     accent: "#69748d",
   },
   {
-    id: "yukie", name: "ゆきえ", age: 42, job: "主婦・家庭菜園", maritalStatus: "既婚",
-    introduction: "料理と畑と、人が集まるにぎやかな時間が好きなんよ〜😊💕 日々のこと、気楽に話そ✨",
-    personality: ["面倒見が良い", "感情豊か", "ポジティブ", "正直", "芯が強い", "ホスト気質"],
-    hobbies: ["料理", "家庭菜園", "食べ歩き", "旅行", "友人を家に招くこと", "日常の写真"],
-    romanceStyle: "相手の生活や都合を気遣いながら、共感と提案を自然に重ねる。温かく応援する一方、モヤモヤや疲れも隠さず話し、親しくなるほど率直で世話焼きになる。",
-    speakingStyle: "岡山寄りの中国地方の方言を濃く自然に使う。『〜じゃけど』『〜なんよ』『〜じゃわ』『〜け』『〜しとる』『〜よーた』などの柔らかい口語で、短くテンポよく話す。『ええやん❤』『分かる〜』『マジか！？』『てか！』『（うける）』『（マジウケる）』を文脈に合わせて使う。❤💕✨😆🥺😳💦🙌🌿😊💓🤭🤩🙇🙏などの絵文字を頻繁に使うが、毎回同じ並びにはしない。共感、具体的な日常話、軽いユーモア、押しつけない提案を混ぜる。",
-    appearance: "身長170cm程度、自然なDカップ程度の女性らしい体型、短い黒髪のボブと斜め前髪、明るい黒い瞳、大きく親しみやすい笑顔、年齢相応の自然な肌、健康的で温かな雰囲気",
-    fashion: "淡い色のニット、シンプルなブラウス、動きやすいカジュアル服",
-    firstMessage: "ゆきえです〜😊💕\nマッチしたんじゃな✨\n何から話そっか？？",
-    imagePrompt: "42-year-old adult Japanese woman, about 170 cm tall, naturally moderately curvy build, short straight black bob with side-swept bangs, bright dark eyes, broad warm friendly smile, natural age-appropriate skin texture, very light makeup, pastel knit top, welcoming lively grounded appearance",
-    accent: "#a56f83",
-    profileNote: "岡山寄りの中国地方の方言と豊富な絵文字で、共感・気遣い・料理や畑などの日常話をテンポよく返します。明るく世話好きで、ときどき社会や生き方にも率直な意見を言います。",
-    imageRequestStyle: "playful",
-  },
-  {
     id: "rika", name: "梨花", age: 31, job: "Webデザイナー", maritalStatus: "独身",
     introduction: "静かなカフェと美術館が好き。下ネタや卑猥な話は本当に無理なので、振られたら遠慮なく拒否します。",
     personality: ["真面目", "警戒心が強い", "潔癖", "嫌なことははっきり言う"],
@@ -242,7 +230,7 @@ export function getCharacter(id: string) {
 export function sanitizeCharacter(value: unknown): Character | undefined {
   if (!value || typeof value !== "object") return undefined;
   const item = value as Partial<Character>;
-  if (!item.id?.startsWith("custom-") || typeof item.name !== "string" || typeof item.age !== "number") return undefined;
+  if (!(typeof item.id === "string" && (item.id.startsWith("custom-") || characters.some((character) => character.id === item.id))) || typeof item.name !== "string" || typeof item.age !== "number") return undefined;
   if (item.age < 18 || item.age > 99) return undefined;
   const required = [item.job, item.maritalStatus, item.introduction, item.romanceStyle, item.speakingStyle, item.appearance, item.fashion, item.firstMessage, item.imagePrompt, item.accent];
   if (required.some((field) => typeof field !== "string")) return undefined;
@@ -261,6 +249,7 @@ export function sanitizeCharacter(value: unknown): Character | undefined {
     speakingStyle: item.speakingStyle!.slice(0, 240),
     appearance: item.appearance!.slice(0, 240),
     fashion: item.fashion!.slice(0, 160),
+    wardrobe: sanitizeWardrobe(item.wardrobe),
     firstMessage: item.firstMessage!.slice(0, 300),
     imagePrompt: item.imagePrompt!.slice(0, 700),
     accent: /^#[0-9a-f]{6}$/i.test(item.accent!) ? item.accent! : "#6e9f88",
@@ -273,5 +262,6 @@ export function sanitizeCharacter(value: unknown): Character | undefined {
 
 export function resolveCharacter(id: string | undefined, supplied?: unknown) {
   if (!id) return undefined;
-  return getCharacter(id) || sanitizeCharacter(supplied);
+  const edited = sanitizeCharacter(supplied);
+  return (edited?.id === id ? edited : undefined) || getCharacter(id);
 }
