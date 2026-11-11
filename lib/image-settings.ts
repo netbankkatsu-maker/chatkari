@@ -1,4 +1,4 @@
-export type ImageProvider = "xai" | "modelslab" | "venice";
+export type ImageProvider = "spicy";
 export type ImageStyle = "realistic" | "anime";
 export type ImageSafetyLevel = "standard" | "strict";
 
@@ -10,7 +10,7 @@ export type ImageGenerationSettings = {
 };
 
 export const DEFAULT_IMAGE_SETTINGS: ImageGenerationSettings = {
-  provider: "venice",
+  provider: "spicy",
   style: "realistic",
   samples: 1,
   safetyLevel: "standard",
@@ -19,7 +19,7 @@ export const DEFAULT_IMAGE_SETTINGS: ImageGenerationSettings = {
 export function sanitizeImageSettings(value: unknown): ImageGenerationSettings {
   const item = value && typeof value === "object" ? value as Partial<ImageGenerationSettings> : {};
   return {
-    provider: "venice",
+    provider: "spicy",
     style: "realistic",
     samples: Math.max(1, Math.min(4, Math.round(Number(item.samples) || 1))),
     safetyLevel: item.safetyLevel === "strict" ? "strict" : "standard",

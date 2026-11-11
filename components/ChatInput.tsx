@@ -210,7 +210,7 @@ export function ChatInput({ disabled, onSend }: {
       {imageUrl && (
         <div className="chat-image-preview">
           <div><Image src={imageUrl} alt="送信する画像のプレビュー" fill sizes="80px" unoptimized /></div>
-          <span>この画像を送信します<small>画像は会話への反応のためxAI APIへ送られます</small></span>
+          <span>この画像を送信します<small>画像は会話への反応のためSpicy APIへ送られます</small></span>
           <button type="button" onClick={() => setImageUrl(undefined)} aria-label="添付画像を削除">×</button>
         </div>
       )}

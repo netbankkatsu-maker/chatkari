@@ -19,7 +19,7 @@ function ChatImage({ src, alt }: { src: string; alt: string }) {
   if (failed) return <p className="message-image-error">画像を表示できませんでした</p>;
   return (
     <div className="message-image">
-      {/* Generated URLs come from ModelsLab/xAI CDNs; next/image blocked those as "?". */}
+      {/* Generated images arrive as data URLs; render them directly. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={attempt}
