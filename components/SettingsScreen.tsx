@@ -7,7 +7,7 @@ import { DEFAULT_IMAGE_SETTINGS, loadImageSettings, type ImageProvider, type Ima
 
 type BillingResult = {
   configured?: boolean;
-  provider?: "venice" | "xai";
+  provider?: "spicy";
   remainingDiem?: number;
   bundledCredits?: number;
   earnedCredits?: number;
@@ -91,7 +91,7 @@ export function SettingsScreen() {
             <fieldset className="image-setting-group">
               <legend>画像生成サービス</legend>
               <div className="image-option-grid">
-                <label className={imageProvider === "venice" ? "is-selected" : ""}><input type="radio" name="image-provider" value="venice" checked={imageProvider === "venice"} onChange={() => setImageProvider("venice")} /><strong>Venice AI</strong><small>チャットと画像の接続先</small></label>
+                <label className={imageProvider === "spicy" ? "is-selected" : ""}><input type="radio" name="image-provider" value="spicy" checked={imageProvider === "spicy"} onChange={() => setImageProvider("spicy")} /><strong>SpicyAPI</strong><small>チャットと画像の接続先</small></label>
               </div>
             </fieldset>
             <fieldset className="image-setting-group">
@@ -142,10 +142,9 @@ export function SettingsScreen() {
 
         {typeof result?.remainingUsd === "number" && (
           <div className="balance-card" aria-live="polite">
-            <span>{result.provider === "venice" ? "Venice USD残高" : "残りクレジット"}</span>
+            <span>Spicy 残高</span>
             <strong>${result.remainingUsd.toFixed(2)}</strong>
             <small>USD・{result.updatedAt ? new Date(result.updatedAt).toLocaleString("ja-JP") : "現在"} 時点</small>
-            {result.provider === "venice" && <small>DIEM: {result.remainingDiem?.toFixed(2) ?? "—"} ・付属クレジット: {result.bundledCredits?.toFixed(2) ?? "—"} ・獲得クレジット: {result.earnedCredits?.toFixed(2) ?? "—"}</small>}
             <button onClick={() => loadBalance()} disabled={loading}>残高を更新</button>
           </div>
         )}
@@ -154,8 +153,8 @@ export function SettingsScreen() {
 
         <div className="settings-note">
           <h2>クレジットについて</h2>
-          <p>チャットと画像生成はVenice AIを利用します。ボイス機能には別途xAIのAPI設定が必要です。生成枚数を増やすと画像料金も枚数に応じて増えます。</p>
-          <a href="https://venice.ai/settings/api" target="_blank" rel="noreferrer">Venice AIで詳細を見る ↗</a>
+          <p>チャット・画像生成・ボイス機能はすべてSpicyAPIを利用します。生成枚数を増やすと画像料金も枚数に応じて増えます。</p>
+          <a href="https://spicyapi.ai" target="_blank" rel="noreferrer">SpicyAPIで詳細を見る ↗</a>
         </div>
         </div>
       </section>

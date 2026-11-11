@@ -1,9 +1,15 @@
 import sharp from "sharp";
 
 export async function cropGenitalCloseup(imageUrl: string) {
-  const response = await fetch(imageUrl);
-  if (!response.ok) throw new Error("closeup source missing");
-  const buffer = Buffer.from(await response.arrayBuffer());
+  let buffer: Buffer;
+  const dataMatch = /^data:image\/[a-z]+;base64,(.+)$/.exec(imageUrl);
+  if (dataMatch) {
+    buffer = Buffer.from(dataMatch[1], "base64");
+  } else {
+    const response = await fetch(imageUrl);
+    if (!response.ok) throw new Error("closeup source missing");
+    buffer = Buffer.from(await response.arrayBuffer());
+  }
   const image = sharp(buffer);
   const { width = 512, height = 768 } = await image.metadata();
   const cropped = await image
